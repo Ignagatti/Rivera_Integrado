@@ -920,6 +920,7 @@
             const [withBox, setWithBox] = useState(true);
             const [empQtyInput, setEmpQtyInput] = useState('');
             const [peopleQtyInput, setPeopleQtyInput] = useState('');
+            const [libreObsInput, setLibreObsInput] = useState('');
             const [clientInput, setClientInput] = useState('');
             const [destinationOverride, setDestinationOverride] = useState(null);
 
@@ -1011,6 +1012,20 @@
                 return pizzasSum + drinksSum + empSum;
             }, [isLibre, peopleQtyInput, prices.pizzaLibreH, prices.empanada, currentPizzas, currentDrinks, empQtyInput]);
 
+            const toggleLibreExclusionFlavor = (flavor) => {
+                const token = `Sin ${flavor}`;
+                const low = libreObsInput.toLowerCase();
+                const currentList = pizzaFlavors
+                    .map(f => `Sin ${f}`)
+                    .filter(t => low.includes(t.toLowerCase()));
+                const idx = currentList.findIndex(x => x.toLowerCase() === token.toLowerCase());
+                if (idx !== -1) currentList.splice(idx, 1);
+                else currentList.push(token);
+                const nextVal = currentList.length > 0 ? `NO QUIEREN: ${currentList.join(', ')}` : '';
+                setLibreObsInput(nextVal);
+                if (libreObsRef.current) libreObsRef.current.value = nextVal;
+            };
+
             const handleFlavorClick = (flavor) => {
                 const idx = selectedFlavors.indexOf(flavor);
                 if (idx !== -1) {
@@ -1094,7 +1109,7 @@
                     const rawPeople = parseInt(peopleQtyRef.current?.value || peopleQtyInput, 10);
                     if (isNaN(rawPeople) || rawPeople <= 0) return showAlert("Ingresá una cantidad de personas válida (mayor a 0)");
                     const people = rawPeople;
-                    const obs = (libreObsRef.current?.value || "").trim();
+                    const obs = (libreObsRef.current?.value || libreObsInput || "").trim();
 
                     const pricePerPerson = Math.max(0, parseInt(prices.pizzaLibreH, 10) || 0);
                     const tableTotal = people * pricePerPerson;
@@ -1117,6 +1132,7 @@
                     if (peopleQtyRef.current) peopleQtyRef.current.value = "";
                     if (libreObsRef.current) libreObsRef.current.value = "";
                     setPeopleQtyInput('');
+                    setLibreObsInput('');
                 } else {
                     const rawEmp = parseInt(empanadasRef.current?.value || empQtyInput, 10);
                     const empQty = isNaN(rawEmp) || rawEmp < 0 ? 0 : rawEmp;
@@ -1438,7 +1454,26 @@
                                             <input ref={peopleQtyRef} type="number" placeholder="Cant. Pers." value={peopleQtyInput} onChange={e => setPeopleQtyInput(e.target.value)} className="w-32 sm:w-36 p-2.5 border-2 border-purple-400 rounded-lg text-center font-black text-lg shadow-sm focus:ring-2 focus:ring-purple-400 focus:outline-none" />
                                             <span className="text-[11px] font-bold text-purple-700 block text-center mt-1">(${prices.pizzaLibreH || 0} c/u)</span>
                                         </div>
-                                        <input ref={libreObsRef} type="text" placeholder="Observación Mesa Libre (mozo, ubicación, etc)..." className="flex-1 p-2.5 border-2 border-purple-400 rounded-lg h-[50px] text-sm shadow-sm font-medium focus:ring-2 focus:ring-purple-400 focus:outline-none" />
+                                        <input ref={libreObsRef} type="text" value={libreObsInput} onChange={e => setLibreObsInput(e.target.value)} placeholder="Observación Mesa Libre (ej: NO QUIEREN: Sin Roquefort)..." className="flex-1 p-2.5 border-2 border-purple-400 rounded-lg h-[50px] text-sm shadow-sm font-medium focus:ring-2 focus:ring-purple-400 focus:outline-none" />
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {pizzaFlavors.map(f => {
+                                            const isExcluded = libreObsInput.toLowerCase().includes(`sin ${f.toLowerCase()}`);
+                                            return (
+                                                <button
+                                                    key={f}
+                                                    type="button"
+                                                    onClick={() => toggleLibreExclusionFlavor(f)}
+                                                    className={`px-2.5 py-1 rounded-full text-xs font-bold border transition cursor-pointer ${
+                                                        isExcluded
+                                                            ? 'bg-red-600 text-white border-red-700 shadow-sm'
+                                                            : 'bg-white text-purple-900 border-purple-300 hover:bg-purple-100'
+                                                    }`}
+                                                >
+                                                    Sin {f}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                     
                                     <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-5 flex flex-col items-center justify-center text-center space-y-2 text-purple-900 mt-2 shadow-sm">
@@ -1516,8 +1551,8 @@
                                             })}
                                         </div>
 
-                                        <div className="flex gap-2 items-center pt-1 border-t border-orange-200/60">
-                                            <div className="w-44 sm:w-56 bg-white px-2.5 py-1.5 rounded border border-orange-200 text-xs truncate shrink-0" title="Gustos seleccionados">
+                                        <div className="flex gap-2 items-center justify-between pt-1 border-t border-orange-200/60">
+                                            <div className="flex-1 bg-white px-2.5 py-1.5 rounded border border-orange-200 text-xs truncate" title="Gustos seleccionados">
                                                 {selectedFlavors.length === 0 ? (
                                                     <span className="text-gray-400 italic">1, 2 o 3 gustos...</span>
                                                 ) : (
@@ -1528,12 +1563,6 @@
                                                     </span>
                                                 )}
                                             </div>
-                                            <input 
-                                                ref={obsRef} 
-                                                type="text" 
-                                                placeholder="Observación pizza (sin cebolla, dorada, etc)..." 
-                                                className="flex-1 min-w-[120px] p-1.5 border border-gray-300 rounded text-xs bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" 
-                                            />
                                             <div className="flex items-center gap-1">
                                                 <input ref={pizzaQtyRef} type="number" min="1" defaultValue="1" className="w-12 p-1.5 border rounded text-center font-bold text-xs" />
                                                 <button 

@@ -1019,15 +1019,39 @@ app.post('/api/menu/items', async (req, res) => {
             }
         } else {
             prices.beverages = prices.beverages || [];
+            const resolveCategory = (n, c) => {
+                if (c && c !== 'otro') return c;
+                const low = (n || '').toLowerCase();
+                if (low.includes('fernet') || low.includes('gancia') || low.includes('jarro') || low.includes('trago') || low.includes('gin') || low.includes('piña') || low.includes('whisky') || low.includes('ginebra') || low.includes('medida')) return 'jarro';
+                if (low.includes('agua') || low.includes('soda') || low.includes('saborizada')) return 'agua';
+                if (low.includes('cerveza') || low.includes('heineken') || low.includes('pilsen') || low.includes('santa fe')) return 'cerveza';
+                if (low.includes('vino') || low.includes('valentin') || low.includes('latitud') || low.includes('cordero') || low.includes('alma mora') || low.includes('cosecha') || low.includes('portillo') || low.includes('salentein') || low.includes('rutini')) return 'vino';
+                if (low.includes('lata') || low.includes('coca') || low.includes('sprite') || low.includes('gaseosa')) return 'gaseosa';
+                return c || 'otro';
+            };
+            const targetCat = resolveCategory(cleanName, bevCategory);
             const existing = prices.beverages.find(b => b.name.toLowerCase() === cleanName.toLowerCase());
             if (existing) {
                 existing.price = numPrice;
+                existing.category = targetCat;
             } else {
-                prices.beverages.push({
+                const newBev = {
                     name: cleanName,
                     price: numPrice,
-                    category: bevCategory || 'gaseosa'
-                });
+                    category: targetCat
+                };
+                let insertIdx = -1;
+                for (let i = prices.beverages.length - 1; i >= 0; i--) {
+                    if (resolveCategory(prices.beverages[i].name, prices.beverages[i].category) === targetCat) {
+                        insertIdx = i + 1;
+                        break;
+                    }
+                }
+                if (insertIdx !== -1) {
+                    prices.beverages.splice(insertIdx, 0, newBev);
+                } else {
+                    prices.beverages.push(newBev);
+                }
             }
         }
 

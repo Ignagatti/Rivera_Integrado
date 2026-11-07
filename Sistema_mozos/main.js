@@ -49,6 +49,7 @@ if (pool) {
 }
 
 let isSavingToDb = false;
+let dbSaveSeq = 0;
 let lastDbSnapshotHash = '';
 let pollInterval = null;
 
@@ -215,17 +216,28 @@ function mozosOrderToHumboldtItems(order, prices, existingHumboldtItems = []) {
     for (const bev of order.beverages) {
       const q = Number(bev.quantity) || 0;
       if (q <= 0) continue;
-      const pInfo = (prices?.beverages || []).find(
-        b => b.name.toLowerCase() === String(bev.name).toLowerCase()
+      const bevIdx = (prices?.beverages || []).findIndex(
+        b => String(b.name).trim().toLowerCase() === String(bev.name).trim().toLowerCase()
       );
-      const prev = findPrev(i => i.isBeverage && String(i.name).toLowerCase() === String(bev.name).toLowerCase());
+      const pInfo = bevIdx !== -1 ? prices.beverages[bevIdx] : null;
+      const canonicalName = pInfo ? pInfo.name : bev.name;
+      const prev = findPrev(
+        i => (i.isBeverage || !i.isPizza) && String(i.name).trim().toLowerCase() === String(canonicalName).trim().toLowerCase()
+      );
       items.push({
-        id: `bev_${bev.name}`,
-        name: bev.name,
+        id: bevIdx !== -1 ? `bev_${bevIdx}` : `bev_${canonicalName}`,
+        name: canonicalName,
         price: pInfo ? Number(pInfo.price) || 0 : 0,
         qty: q,
         sentQty: prev ? Math.min(q, Number(prev.sentQty ?? q)) : q,
-        isBeverage: true
+        note: '',
+        pizzaSize: 'entera',
+        isPizza: false,
+        isPizzaLibre: false,
+        isEmpanada: false,
+        isPostre: false,
+        isBeverage: true,
+        bevCategory: pInfo ? (pInfo.category || 'otro') : 'otro'
       });
     }
   }
@@ -328,9 +340,10 @@ async function fetchDbState() {
 
 async function pollRemoteMozosState() {
   if (!pool || isSavingToDb) return;
+  const seqBefore = dbSaveSeq;
   try {
     const remote = await fetchDbState();
-    if (!remote) return;
+    if (!remote || isSavingToDb || dbSaveSeq !== seqBefore) return;
     const hash = JSON.stringify({
       tables: remote.tables,
       barOrders: remote.barOrders,
@@ -414,6 +427,7 @@ app.whenReady().then(() => {
   ipcMain.handle('db:save-state', async (event, stateObj) => {
     if (!pool || !stateObj) return { success: false };
     isSavingToDb = true;
+    dbSaveSeq++;
     const client = await pool.connect().catch(() => null);
     if (!client) {
       isSavingToDb = false;
@@ -424,13 +438,24 @@ app.whenReady().then(() => {
       await client.query('BEGIN');
 
       const configEntries = [
-        ['prices', stateObj.prices],
         ['genericData', stateObj.genericData],
         ['currentMode', stateObj.currentMode],
         ['barOrders', stateObj.barOrders || []],
         ['archivedSales', stateObj.archivedSales || []],
         ['numeroCocina', stateObj.numeroCocina || '']
       ];
+
+      let effectivePrices = stateObj.prices;
+      if (stateObj.includePrices) {
+        configEntries.unshift(['prices', stateObj.prices]);
+      } else {
+        const dbPricesRes = await client.query(`SELECT value FROM rivera_mozos_config WHERE key = 'prices'`);
+        if (dbPricesRes.rowCount > 0 && dbPricesRes.rows[0].value) {
+          effectivePrices = dbPricesRes.rows[0].value;
+        } else if (stateObj.prices) {
+          configEntries.unshift(['prices', stateObj.prices]);
+        }
+      }
 
       for (const [k, v] of configEntries) {
         if (v !== undefined) {
@@ -457,7 +482,7 @@ app.whenReady().then(() => {
           const tNum = String(t.number).trim();
           incomingNums.add(tNum);
           const prevData = existingMap.get(tNum) || {};
-          const humboldtItems = mozosOrderToHumboldtItems(t.order, stateObj.prices, prevData.humboldtItems || []);
+          const humboldtItems = mozosOrderToHumboldtItems(t.order, effectivePrices, prevData.humboldtItems || []);
           if (humboldtItems.length > 0 || t.isPaid) anyTableHasItems = true;
 
           const tableNote = humboldtItems.length > 0

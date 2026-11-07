@@ -34,6 +34,8 @@ let pizzaLibreModalName = 'Pizza Libre General';
 let pizzaLibreCount = 1;
 let selectedLibreExclusions = [];
 let selectedNextRoundFlavors = [];
+let selectedNextRoundExclusions = [];
+let editingPizzaLibreItemIndex = null;
 
 // Estado de cobro
 let checkoutTableTarget = null;
@@ -48,6 +50,7 @@ let confirmModalCallback = null;
 let syncPollingInterval = null;
 let wsConnection = null;
 let isSavingOrder = false;
+let saveOrderSeq = 0;
 
 // ============================================================================
 // CÁLCULO EXACTO DE PRECIOS DE PIZZA (IDÉNTICO A SISTEMA_MOZOS)
@@ -121,10 +124,12 @@ function getPizzaFlavorsCatalog() {
 // ============================================================================
 async function fetchServerState(silent = false) {
     if (isSavingOrder) return;
+    const seqBefore = saveOrderSeq;
     try {
         const res = await fetch('/api/state', { cache: 'no-store' });
         if (!res.ok) throw new Error('Error HTTP obteniendo estado');
         const data = await res.json();
+        if (isSavingOrder || saveOrderSeq !== seqBefore) return;
 
         mozosPrices = data.mozosPrices || {};
         currentMode = data.currentMode || 'sabado';
@@ -811,15 +816,10 @@ function renderMenuItems() {
     const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
     const { size: activePizzaSize, count: requiredFlavorsCount } = getPizzaSelectionParams();
 
-    // Mostrar barra de modo de pizza y observación directa cuando estamos en la categoría Pizzas
+    // Mostrar barra de modo de pizza cuando estamos en la categoría Pizzas (observación "Sin X gusto" es exclusiva de Pizza Libre)
     if (modesBar) {
         if (category.id === 'pizzas') {
             modesBar.classList.remove('hidden');
-            const quickChips = ['Sin Cebolla', 'Sin Aceitunas', 'Sin Ajo', 'Sin Morrón', 'Sin Anchoas', 'Bien Cocida'];
-            const currentNoteParts = inlinePizzaNote
-                ? inlinePizzaNote.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-                : [];
-            const escapedNote = String(inlinePizzaNote || '').replace(/"/g, '&quot;');
 
             modesBar.innerHTML = `
                 <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
@@ -875,32 +875,6 @@ function renderMenuItems() {
                             </button>
                         </div>
                     ` : ''}
-
-                    <div class="pt-1 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2">
-                        <div class="relative flex-1">
-                            <i class="fa-solid fa-comment-dots text-amber-500 text-xs absolute left-3 top-1/2 -translate-y-1/2"></i>
-                            <input id="inline-pizza-note-input" type="text"
-                                value="${escapedNote}"
-                                oninput="onInlinePizzaNoteInput(this.value)"
-                                placeholder="Observación para la pizza (ej: sin cebolla, sin aceitunas)..."
-                                class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]">
-                        </div>
-                        <div class="flex flex-wrap gap-1">
-                            ${quickChips.map(chip => {
-                                const isChipSelected = currentNoteParts.includes(chip.toLowerCase());
-                                return `
-                                    <button type="button" onclick="toggleInlinePizzaExclusionChip('${chip}')"
-                                        class="px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                                            isChipSelected
-                                                ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
-                                                : 'bg-amber-50/70 text-amber-800 border-amber-200 hover:bg-amber-100'
-                                        }">
-                                        ${chip}
-                                    </button>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
                 </div>
             `;
         } else {
@@ -1091,7 +1065,6 @@ function onPizzaItemClicked(pizzaItem) {
     const unitPrice = calculateMozosPizzaPrice(size, toppings);
     const sizeLabel = size === 'media' ? 'Media Pizza' : 'Pizza Entera';
     const itemName = `${sizeLabel} (${toppings.join(' / ')})`;
-    const noteToAttach = (inlinePizzaNote || '').trim();
 
     selectedPizzaFlavors = [];
     inlinePizzaNote = '';
@@ -1101,7 +1074,7 @@ function onPizzaItemClicked(pizzaItem) {
         name: itemName,
         price: unitPrice,
         qty: 1,
-        note: noteToAttach,
+        note: '',
         isPizza: true,
         isPizzaLibre: false,
         pizzaSize: size,
@@ -1289,31 +1262,57 @@ function confirmAddPizzaToOrder() {
 // ============================================================================
 // MODAL PIZZA LIBRE (1RA RONDA Y SIGUIENTES RONDAS)
 // ============================================================================
-function openPizzaLibreModal(item) {
+function parseLibreExclusionsFromNote(noteStr) {
+    const flavors = getPizzaFlavorsCatalog();
+    const matched = [];
+    const low = String(noteStr || '').toLowerCase();
+    for (const f of flavors) {
+        if (low.includes(`sin ${f.name.toLowerCase()}`)) {
+            matched.push(f.name);
+        }
+    }
+    return matched;
+}
+
+function openPizzaLibreModal(item, editItemIndex = null) {
+    editingPizzaLibreItemIndex = editItemIndex !== null && editItemIndex !== undefined ? editItemIndex : null;
     pizzaLibreModalType = item.libreType || 'G';
     pizzaLibreModalPrice = Number(item.price) || Number(mozosPrices?.pizzaLibreG || mozosPrices?.pizzaLibreH) || 16000;
     pizzaLibreModalName = item.name || 'Pizza Libre General';
-    pizzaLibreCount = 1;
-    selectedLibreExclusions = [];
+
+    const tableOrder = (currentTable && ordersByTable[currentTable]) ? ordersByTable[currentTable] : null;
+    const existingItem = (editingPizzaLibreItemIndex !== null && tableOrder && tableOrder.items[editingPizzaLibreItemIndex])
+        ? tableOrder.items[editingPizzaLibreItemIndex]
+        : (tableOrder && Array.isArray(tableOrder.items))
+            ? tableOrder.items.find(it => it.isPizzaLibre && (it.libreType || 'G') === pizzaLibreModalType)
+            : null;
+
+    pizzaLibreCount = (editingPizzaLibreItemIndex !== null && existingItem) ? (Number(existingItem.qty) || 1) : 1;
+    const initialNote = (existingItem && existingItem.note) || (tableOrder && tableOrder.note) || '';
+    selectedLibreExclusions = parseLibreExclusionsFromNote(initialNote);
 
     const countEl = document.getElementById('pizza-libre-count');
-    if (countEl) countEl.textContent = '1';
+    if (countEl) countEl.textContent = String(pizzaLibreCount);
 
     const totalEl = document.getElementById('pizza-libre-total-display');
-    if (totalEl) totalEl.textContent = `$${pizzaLibreModalPrice.toLocaleString('es-AR')}`;
+    if (totalEl) totalEl.textContent = `$${(pizzaLibreModalPrice * pizzaLibreCount).toLocaleString('es-AR')}`;
 
     const textEl = document.getElementById('pizza-libre-exclusions-text');
-    if (textEl) textEl.value = '';
+    if (textEl) textEl.value = initialNote;
 
     const chipsContainer = document.getElementById('pizza-libre-exclusion-chips');
     if (chipsContainer) {
         const flavors = getPizzaFlavorsCatalog();
         chipsContainer.innerHTML = flavors.map(f => {
             const safe = f.name.replace(/'/g, "\\'");
+            const isSel = selectedLibreExclusions.includes(f.name);
+            const cls = isSel
+                ? 'px-2.5 py-1 rounded-full text-[11px] font-bold border border-rose-500 bg-rose-500 text-white transition-all shadow-sm cursor-pointer'
+                : 'px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all cursor-pointer';
             return `
                 <button type="button" onclick="toggleLibreExclusionChip('${safe}')"
                     id="excl-chip-${f.name}"
-                    class="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all">
+                    class="${cls}">
                     Sin ${f.name}
                 </button>
             `;
@@ -1325,6 +1324,7 @@ function openPizzaLibreModal(item) {
 }
 
 function closePizzaLibreModal() {
+    editingPizzaLibreItemIndex = null;
     const modal = document.getElementById('pizza-libre-modal');
     if (modal) modal.classList.add('hidden');
 }
@@ -1346,8 +1346,8 @@ function toggleLibreExclusionChip(flavorName) {
     if (chipBtn) {
         const isSel = selectedLibreExclusions.includes(flavorName);
         chipBtn.className = isSel
-            ? 'px-2.5 py-1 rounded-full text-[11px] font-bold border border-rose-500 bg-rose-500 text-white transition-all shadow-sm'
-            : 'px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all';
+            ? 'px-2.5 py-1 rounded-full text-[11px] font-bold border border-rose-500 bg-rose-500 text-white transition-all shadow-sm cursor-pointer'
+            : 'px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all cursor-pointer';
     }
 
     const textEl = document.getElementById('pizza-libre-exclusions-text');
@@ -1358,18 +1358,41 @@ function toggleLibreExclusionChip(flavorName) {
     }
 }
 
-function confirmAddPizzaLibre() {
+async function confirmAddPizzaLibre() {
     const textEl = document.getElementById('pizza-libre-exclusions-text');
     const rawNote = textEl ? textEl.value.trim() : '';
     const note = (rawNote && selectedLibreExclusions.length > 0 && !/^no quieren/i.test(rawNote))
         ? `NO QUIEREN: ${rawNote}`
         : rawNote;
 
-    if (note && currentTable && ordersByTable[currentTable] && !ordersByTable[currentTable].note) {
+    if (currentTable && ordersByTable[currentTable]) {
         ordersByTable[currentTable].note = note;
+        // Actualizar también otros ítems de Pizza Libre de la misma mesa con la observación
+        (ordersByTable[currentTable].items || []).forEach(it => {
+            if (it.isPizzaLibre) {
+                it.note = note;
+                it.libreExclusions = [...selectedLibreExclusions];
+            }
+        });
     }
 
-    addDirectItemToOrder({
+    if (editingPizzaLibreItemIndex !== null && currentTable && ordersByTable[currentTable]) {
+        const targetItem = ordersByTable[currentTable].items[editingPizzaLibreItemIndex];
+        if (targetItem) {
+            targetItem.qty = pizzaLibreCount;
+            targetItem.note = note;
+            targetItem.libreExclusions = [...selectedLibreExclusions];
+            closePizzaLibreModal();
+            renderOrder();
+            renderMenuItems();
+            await saveCurrentTableToServer();
+            showToast('Pizza Libre actualizada', 'success');
+            return;
+        }
+    }
+
+    closePizzaLibreModal();
+    await addDirectItemToOrder({
         id: `pizza_libre_${pizzaLibreModalType.toLowerCase()}`,
         name: pizzaLibreModalName,
         price: pizzaLibreModalPrice,
@@ -1380,8 +1403,6 @@ function confirmAddPizzaLibre() {
         libreType: pizzaLibreModalType,
         libreExclusions: [...selectedLibreExclusions]
     });
-
-    closePizzaLibreModal();
 }
 
 function openNextRoundModal() {
@@ -1389,12 +1410,32 @@ function openNextRoundModal() {
     const tableOrder = ordersByTable[currentTable];
     const nextRound = (Number(tableOrder.libreRounds) || 1) + 1;
     selectedNextRoundFlavors = [];
+    selectedNextRoundExclusions = parseLibreExclusionsFromNote(tableOrder.note || '');
 
     const titleEl = document.getElementById('next-round-modal-title');
     if (titleEl) titleEl.textContent = `Pedir Ronda #${nextRound}`;
 
     const exclIn = document.getElementById('next-round-exclusions-input');
     if (exclIn) exclIn.value = tableOrder.note || '';
+
+    const exclChipsEl = document.getElementById('next-round-exclusion-chips');
+    if (exclChipsEl) {
+        const flavors = getPizzaFlavorsCatalog();
+        exclChipsEl.innerHTML = flavors.map(f => {
+            const safe = f.name.replace(/'/g, "\\'");
+            const isSel = selectedNextRoundExclusions.includes(f.name);
+            const cls = isSel
+                ? 'px-2.5 py-1 rounded-full text-[11px] font-bold border border-rose-500 bg-rose-500 text-white transition-all shadow-sm cursor-pointer'
+                : 'px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all cursor-pointer';
+            return `
+                <button type="button" onclick="toggleNextRoundExclusionChip('${safe}')"
+                    id="next-excl-chip-${f.name}"
+                    class="${cls}">
+                    Sin ${f.name}
+                </button>
+            `;
+        }).join('');
+    }
 
     const notesIn = document.getElementById('next-round-notes');
     if (notesIn) notesIn.value = '';
@@ -1406,7 +1447,7 @@ function openNextRoundModal() {
             const safe = f.name.replace(/'/g, "\\'");
             return `
                 <button type="button" onclick="toggleNextRoundChip('${safe}')"
-                    class="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-[#2563eb]">
+                    class="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-[#2563eb] cursor-pointer">
                     + ${f.name}
                 </button>
             `;
@@ -1415,6 +1456,27 @@ function openNextRoundModal() {
 
     const modal = document.getElementById('pizza-libre-next-round-modal');
     if (modal) modal.classList.remove('hidden');
+}
+
+function toggleNextRoundExclusionChip(flavorName) {
+    const idx = selectedNextRoundExclusions.indexOf(flavorName);
+    if (idx !== -1) selectedNextRoundExclusions.splice(idx, 1);
+    else selectedNextRoundExclusions.push(flavorName);
+
+    const chipBtn = document.getElementById(`next-excl-chip-${flavorName}`);
+    if (chipBtn) {
+        const isSel = selectedNextRoundExclusions.includes(flavorName);
+        chipBtn.className = isSel
+            ? 'px-2.5 py-1 rounded-full text-[11px] font-bold border border-rose-500 bg-rose-500 text-white transition-all shadow-sm cursor-pointer'
+            : 'px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all cursor-pointer';
+    }
+
+    const exclIn = document.getElementById('next-round-exclusions-input');
+    if (exclIn) {
+        exclIn.value = selectedNextRoundExclusions.length > 0
+            ? `NO QUIEREN: ${selectedNextRoundExclusions.map(f => `Sin ${f}`).join(', ')}`
+            : '';
+    }
 }
 
 function closeNextRoundModal() {
@@ -1440,6 +1502,7 @@ async function confirmAddNextRound() {
     const combinedNote = [exclIn ? exclIn.value.trim() : '', notesIn ? notesIn.value.trim() : ''].filter(Boolean).join(' | ');
 
     isSavingOrder = true;
+    saveOrderSeq++;
     try {
         const res = await fetch('/api/orders/send-kitchen', {
             method: 'POST',
@@ -1491,14 +1554,19 @@ async function addDirectItemToOrder(newItem) {
 
     const addQty = Number(newItem.qty) || 1;
     const existing = tableOrder.items.find(it =>
-        it.name === newItem.name &&
-        (it.note || '') === (newItem.note || '') &&
-        (it.pizzaSize || 'entera') === (newItem.pizzaSize || 'entera')
+        String(it.name).trim().toLowerCase() === String(newItem.name).trim().toLowerCase() &&
+        (it.isPizzaLibre
+            ? (it.libreType || 'G') === (newItem.libreType || 'G')
+            : ((it.note || '') === (newItem.note || '') && (it.pizzaSize || 'entera') === (newItem.pizzaSize || 'entera')))
     );
 
     if (existing) {
         existing.qty = (Number(existing.qty) || 0) + addQty;
         existing.price = Number(newItem.price) || existing.price;
+        if (newItem.isPizzaLibre && newItem.note !== undefined) {
+            existing.note = newItem.note;
+            existing.libreExclusions = Array.isArray(newItem.libreExclusions) ? newItem.libreExclusions : [];
+        }
     } else {
         tableOrder.items.push({
             id: newItem.id || `item_${Date.now()}`,
@@ -1558,6 +1626,7 @@ async function saveCurrentTableToServer() {
     if (!currentTable || !ordersByTable[currentTable]) return;
     const tableOrder = ordersByTable[currentTable];
     isSavingOrder = true;
+    saveOrderSeq++;
     try {
         await fetch(`/api/tables/${encodeURIComponent(currentTable)}/save`, {
             method: 'POST',
@@ -1580,6 +1649,7 @@ function renderOrder(skipNoteUpdate = false) {
     const listEl = document.getElementById('order-items-list');
     const totalEl = document.getElementById('order-total-price');
     const noteInput = document.getElementById('order-note');
+    const noteContainer = document.getElementById('order-note-container');
     const countBadge = document.getElementById('item-count-badge');
     const drawerTitleMobile = document.getElementById('drawer-title-mobile');
     const drawerTotalPreview = document.getElementById('drawer-total-preview');
@@ -1590,7 +1660,12 @@ function renderOrder(skipNoteUpdate = false) {
     if (!currentTable || !ordersByTable[currentTable]) return;
     const tableOrder = ordersByTable[currentTable];
     const items = Array.isArray(tableOrder.items) ? tableOrder.items : [];
+    const hasLibreInOrder = items.some(it => it.isPizzaLibre);
 
+    if (noteContainer) {
+        if (hasLibreInOrder) noteContainer.classList.remove('hidden');
+        else noteContainer.classList.add('hidden');
+    }
     if (noteInput && !skipNoteUpdate) {
         noteInput.value = tableOrder.note || '';
     }
@@ -1682,15 +1757,15 @@ function renderOrder(skipNoteUpdate = false) {
                                 ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">${pending} sin enviar</span>`
                                 : `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Enviado</span>`
                             }
-                            ${it.isPizza ? `
+                            ${it.isPizzaLibre ? `
                                 <button onclick="editOrderItemNote(${idx})"
-                                    title="Agregar o editar observación / qué gusto no quiere"
+                                    title="Marcar qué gusto NO quiere la mesa de Pizza Libre"
                                     class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-800 border border-slate-200 transition-colors cursor-pointer">
-                                    <i class="fa-solid fa-pen text-[9px] mr-0.5"></i>Obs
+                                    <i class="fa-solid fa-pen text-[9px] mr-0.5"></i>Sin gusto / Obs
                                 </button>
                             ` : ''}
                         </div>
-                        ${it.note ? `<p class="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block mt-1">⚠️ ${it.note}</p>` : ''}
+                        ${it.isPizzaLibre && it.note ? `<p class="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block mt-1">⚠️ ${it.note}</p>` : ''}
                         <p class="text-xs font-extrabold text-[#2563eb] mt-0.5">$${lineTotal.toLocaleString('es-AR')}</p>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
@@ -1716,18 +1791,9 @@ async function editOrderItemNote(index) {
     if (!currentTable || !ordersByTable[currentTable]) return;
     const tableOrder = ordersByTable[currentTable];
     const item = tableOrder.items[index];
-    if (!item) return;
+    if (!item || !item.isPizzaLibre) return;
 
-    const currentNote = item.note || '';
-    const updated = window.prompt(`Observación / Qué gusto o ingrediente NO quiere en ${item.name}:`, currentNote);
-    if (updated === null) return;
-    item.note = updated.trim();
-    if (item.isPizzaLibre && item.note) {
-        tableOrder.note = item.note;
-    }
-    renderOrder();
-    await saveCurrentTableToServer();
-    showToast('Observación actualizada', 'success');
+    openPizzaLibreModal(item, index);
 }
 
 async function sendOrderToKitchen() {
@@ -1756,6 +1822,7 @@ async function sendOrderToKitchen() {
     }
 
     isSavingOrder = true;
+    saveOrderSeq++;
     try {
         const res = await fetch('/api/orders/send-kitchen', {
             method: 'POST',

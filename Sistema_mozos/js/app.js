@@ -108,11 +108,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Constructor de pizzas y observaciones
     const libreObsInput       = document.getElementById('libre-obs-input');
+    const libreObsChips       = document.getElementById('libre-obs-chips');
     const pizzaSizeSelect = document.getElementById('pizza-size');
     const pizzaTopping1Select = document.getElementById('pizza-topping-1');
     const pizzaTopping2Select = document.getElementById('pizza-topping-2');
     const pizzaTopping3Select = document.getElementById('pizza-topping-3');
-    const pizzaObsInput       = document.getElementById('pizza-obs-input');
     const addCustomPizzaBtn = document.getElementById('add-custom-pizza-btn');
 
     // Barra
@@ -408,13 +408,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const item = document.createElement('div');
                 item.className = 'order-item-bev flex justify-between items-center bg-green-100 border-green-500';
                 const desc = `1x Pizza ${pizza.size} (${pizza.toppings.filter(t => t !== 'ninguno').join(', ')})`;
-                const obsHtml = pizza.obs
-                    ? `<div class="text-xs font-bold text-amber-800 mt-0.5">⚠️ Obs: ${escapeHtml(pizza.obs)}</div>`
-                    : '';
                 item.innerHTML = `
                     <div>
                         <span class="font-medium text-gray-800">${escapeHtml(desc)}</span>
-                        ${obsHtml}
                     </div>
                     <button data-pizza-index="${index}" class="remove-pizza-btn" title="Quitar Pizza">X</button>
                 `;
@@ -424,7 +420,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         order.beverages.forEach((bev, index) => {
             const bevEl = document.createElement('div');
-            const bevInfo = appState.prices.beverages.find(b => b.name === bev.name) || {};
+            const bevInfo = appState.prices.beverages.find(
+                b => String(b.name).trim().toLowerCase() === String(bev.name).trim().toLowerCase()
+            ) || {};
             const colorCls = getBeverageColor(bev.name, bevInfo.category);
             bevEl.className = `order-item-bev flex justify-between items-center ${colorCls}`;
             bevEl.innerHTML = `
@@ -438,6 +436,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    function renderLibreExclusionChips() {
+        if (!libreObsChips || !activeEntity) return;
+        const currentNote = String(activeEntity.order.libreObs || activeEntity.note || '');
+        const lowNote = currentNote.toLowerCase();
+        const pizzas = Array.isArray(appState.prices.preciosPizzas) ? appState.prices.preciosPizzas : [];
+
+        libreObsChips.innerHTML = '';
+        pizzas.forEach(pz => {
+            const token = `Sin ${pz.name}`;
+            const isSelected = lowNote.includes(token.toLowerCase());
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = token;
+            btn.className = isSelected
+                ? 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-600 text-white border border-red-700 shadow-xs transition cursor-pointer'
+                : 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white text-gray-700 border border-gray-300 hover:bg-amber-100 transition cursor-pointer';
+            btn.addEventListener('click', () => {
+                const selectedList = [];
+                const curLow = String(activeEntity.order.libreObs || activeEntity.note || '').toLowerCase();
+                pizzas.forEach(p => {
+                    const t = `Sin ${p.name}`;
+                    if (curLow.includes(t.toLowerCase())) {
+                        selectedList.push(t);
+                    }
+                });
+                const idx = selectedList.findIndex(x => x.toLowerCase() === token.toLowerCase());
+                if (idx !== -1) selectedList.splice(idx, 1);
+                else selectedList.push(token);
+
+                const newVal = selectedList.length > 0 ? `NO QUIEREN: ${selectedList.join(', ')}` : '';
+                activeEntity.order.libreObs = newVal;
+                activeEntity.note = newVal;
+                if (libreObsInput) libreObsInput.value = newVal;
+                renderLibreExclusionChips();
+                renderOrderList();
+                saveState();
+            });
+            libreObsChips.appendChild(btn);
+        });
+    }
+
     function updateOrderModalUI() {
         if (!activeEntity) return;
         const order = activeEntity.order;
@@ -447,6 +486,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (libreObsInput && document.activeElement !== libreObsInput) {
             libreObsInput.value = order.libreObs || activeEntity.note || '';
         }
+        renderLibreExclusionChips();
         if (menoresCount) menoresCount.textContent = order.menores || 0;
         if (menorPriceInput) menorPriceInput.value = (order.menorPrice !== undefined && order.menorPrice !== null) ? order.menorPrice : '';
         empanadasCount.textContent = order.empanadas || 0;
@@ -1115,6 +1155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const val = libreObsInput.value;
             activeEntity.order.libreObs = val;
             activeEntity.note = val;
+            renderLibreExclusionChips();
             renderOrderList();
             saveState();
         });
@@ -1125,14 +1166,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const topping1 = pizzaTopping1Select.value;
         const topping2 = pizzaTopping2Select.value;
         const topping3 = pizzaTopping3Select.value;
-        const obs      = pizzaObsInput ? pizzaObsInput.value.trim() : '';
 
         const toppings = size === 'media'
             ? [topping1, topping2].filter(t => t !== 'ninguno')
             : [topping1, topping2, topping3].filter(t => t !== 'ninguno');
 
-        activeEntity.order.pizzasPersonalizadas.push({ id: Date.now(), size, toppings, obs });
-        if (pizzaObsInput) pizzaObsInput.value = '';
+        activeEntity.order.pizzasPersonalizadas.push({ id: Date.now(), size, toppings, obs: '' });
         updateOrderModalUI();
         saveState();
     });
@@ -1141,7 +1180,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const name = beverageSelect.value;
         const quantity = parseInt(beverageQuantityInput.value);
         if (!name || quantity <= 0) return;
-        const existing = activeEntity.order.beverages.find(b => b.name === name);
+        const existing = activeEntity.order.beverages.find(
+            b => String(b.name).trim().toLowerCase() === String(name).trim().toLowerCase()
+        );
         if (existing) { existing.quantity += quantity; }
         else { activeEntity.order.beverages.push({ name, quantity }); }
         beverageQuantityInput.value = 1;
@@ -1368,6 +1409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             newBeverageNameInput.value = '';
             newBeveragePriceInput.value = '';
             renderBeveragePrices();
+            saveState({ includePrices: true });
         }
     });
 
@@ -1378,6 +1420,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!isNaN(idx) && appState.prices.beverages[idx]) {
                 appState.prices.beverages.splice(idx, 1);
                 renderBeveragePrices();
+                saveState({ includePrices: true });
             }
         }
     });
@@ -1388,6 +1431,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             appState.prices.preciosPizzas.push({ name: name, precioEntera: 0, precioMedia: 0 });
             newPizzaNameInput.value = '';
             renderCustomPizzaPrices();
+            saveState({ includePrices: true });
         }
     });
 
@@ -1398,6 +1442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!isNaN(idx) && appState.prices.preciosPizzas[idx]) {
                 appState.prices.preciosPizzas.splice(idx, 1);
                 renderCustomPizzaPrices();
+                saveState({ includePrices: true });
             }
         }
     });
@@ -1429,7 +1474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        saveState();
+        saveState({ includePrices: true });
         closePricesModal();
     });
 
@@ -1567,7 +1612,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (order.beverages && order.beverages.length > 0) {
             order.beverages.forEach(bev => {
-                const info = appState.prices.beverages.find(b => b.name === bev.name) || { price: 0 };
+                const info = appState.prices.beverages.find(
+                    b => String(b.name).trim().toLowerCase() === String(bev.name).trim().toLowerCase()
+                ) || { price: 0 };
                 bodyHtml += line(`${bev.quantity} x ${bev.name}`, bev.quantity * info.price);
             });
         }
@@ -1609,31 +1656,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.electronAPI && window.electronAPI.onRemoteUpdate) {
         window.electronAPI.onRemoteUpdate(remote => {
             if (!remote) return;
-            // Si hay un modal de mesa abierto, no pisar la mesa activa mientras se edita
             const editingTableNum = (activeEntity && activeEntity.id && activeEntity.id.startsWith('table-'))
                 ? String(activeEntity.number)
                 : null;
+
+            if (remote.prices && (!pricesModal || pricesModal.style.display !== 'flex')) {
+                applyPricesObject(remote.prices);
+            }
 
             if (Array.isArray(remote.tables)) {
                 const localMap = new Map(appState.tables.map(t => [String(t.number), t]));
                 appState.tables = remote.tables.map(dbt => {
                     const numStr = String(dbt.number);
-                    if (editingTableNum && numStr === editingTableNum) {
-                        return activeEntity;
-                    }
                     const loc = localMap.get(numStr);
-                    return {
+                    const updatedTable = {
                         ...dbt,
                         x: loc && loc.x !== undefined ? loc.x : dbt.x,
                         y: loc && loc.y !== undefined ? loc.y : dbt.y,
                         width: loc && loc.width ? loc.width : dbt.width,
                         height: loc && loc.height ? loc.height : dbt.height,
+                        isPaid: !!dbt.isPaid,
+                        paidAmount: Number(dbt.paidAmount) || 0,
+                        tipAmount: Number(dbt.tipAmount) || 0,
+                        waiterName: dbt.waiterName || (loc && loc.waiterName) || 'Sin asignar',
+                        note: dbt.note || '',
+                        libreRounds: dbt.libreRounds || 1,
                         order: Object.assign(getNewOrderObject(), dbt.order || {})
                     };
+                    if (editingTableNum && numStr === editingTableNum && activeEntity) {
+                        activeEntity.isPaid = updatedTable.isPaid;
+                        activeEntity.paidAmount = updatedTable.paidAmount;
+                        activeEntity.tipAmount = updatedTable.tipAmount;
+                        activeEntity.waiterName = updatedTable.waiterName;
+                        activeEntity.note = updatedTable.note;
+                        activeEntity.libreRounds = updatedTable.libreRounds;
+                        activeEntity.order = updatedTable.order;
+                        orderBeforeChanges = JSON.parse(JSON.stringify(activeEntity.order));
+                        return activeEntity;
+                    }
+                    return updatedTable;
                 });
-            }
-            if (remote.prices && (!pricesModal || pricesModal.style.display !== 'flex')) {
-                applyPricesObject(remote.prices);
             }
             if (remote.currentMode && remote.currentMode !== appState.currentMode) {
                 appState.currentMode = remote.currentMode;
@@ -1648,6 +1710,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (Array.isArray(remote.archivedSales)) {
                 appState.archivedSales = remote.archivedSales;
+            }
+            if (activeEntity && orderModal && orderModal.style.display === 'flex') {
+                updateOrderModalUI();
             }
             localStorage.setItem('restaurantState', JSON.stringify({
                 tables: appState.tables,

@@ -355,12 +355,12 @@
                         <!-- Ítems dinámicos -->
                     </div>
 
-                    <!-- Notas de Cocina y Resumen Total -->
+                    <!-- Notas de Pizza Libre y Resumen Total -->
                     <div class="p-3.5 bg-white border-t border-slate-200 space-y-3 shrink-0">
-                        <div>
+                        <div id="order-note-container" class="hidden">
                             <input type="text" id="order-note" oninput="saveCurrentNote(this.value)"
-                                placeholder="Notas de cocina (ej: sin cebolla, bien cocida)..."
-                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#2563eb] transition-all">
+                                placeholder="Sin qué gusto para Pizza Libre (ej: NO QUIEREN: Sin Roquefort)..."
+                                class="w-full bg-amber-50/70 border border-amber-200 rounded-xl px-3 py-2 text-xs font-semibold text-amber-900 placeholder-amber-600/70 focus:outline-none focus:border-amber-500 transition-all">
                         </div>
 
                         <div class="flex items-center justify-between pt-1">
@@ -1303,9 +1303,15 @@
             </div>
 
             <div class="space-y-3">
-                <div class="space-y-1">
-                    <label class="text-xs font-semibold text-slate-700 block">Gustos que NO quieren en la mesa</label>
-                    <input type="text" id="next-round-exclusions-input" placeholder="Ej: Sin cebolla, sin anchoa..."
+                <div class="space-y-1.5">
+                    <label class="text-xs font-semibold text-slate-700 block flex items-center justify-between">
+                        <span>Gustos que NO quieren en la mesa</span>
+                        <span class="text-[10px] text-slate-400 font-normal">Toca para marcar</span>
+                    </label>
+                    <div class="flex flex-wrap gap-1.5" id="next-round-exclusion-chips">
+                        <!-- Generados dinámicamente -->
+                    </div>
+                    <input type="text" id="next-round-exclusions-input" placeholder="Ej: NO QUIEREN: Sin Roquefort, Sin Anchoa..."
                         class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]">
                 </div>
 

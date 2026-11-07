@@ -198,25 +198,30 @@ function humboldtItemsToMozosOrder(items, existingOrder, prices) {
                     toppings = cleaned.split(/\s*\/\s*|\s+y\s+|,\s*/).map(s => s.replace(/^1\/[23]\s+/i, '').trim()).filter(Boolean);
                 }
             }
-            const pizzaObs = (item.note || item.obs || '').trim();
             for (let i = 0; i < qty; i++) {
                 order.pizzasPersonalizadas.push({
                     id: (item.pizzaIds && item.pizzaIds[i]) ? item.pizzaIds[i] : `${item.pizzaId || Date.now()}_${i}_${Math.random().toString(36).substring(2, 5)}`,
                     size,
                     toppings,
-                    obs: pizzaObs
+                    obs: ''
                 });
             }
             continue;
         }
 
-        // Bebidas
-        const existingBev = order.beverages.find(b => b.name === item.name);
+        // Bebidas (sincronizadas con el nombre exacto de Sistema_mozos)
+        const catalogBev = (prices && Array.isArray(prices.beverages))
+            ? prices.beverages.find(b => String(b.name).trim().toLowerCase() === String(item.name).trim().toLowerCase())
+            : null;
+        const canonicalBevName = catalogBev ? catalogBev.name : item.name;
+        const existingBev = order.beverages.find(
+            b => String(b.name).trim().toLowerCase() === String(canonicalBevName).trim().toLowerCase()
+        );
         if (existingBev) {
             existingBev.quantity += qty;
         } else {
             order.beverages.push({
-                name: item.name,
+                name: canonicalBevName,
                 quantity: qty
             });
         }
@@ -440,14 +445,26 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
         for (const bev of order.beverages) {
             const qty = Number(bev.quantity) || 0;
             if (qty <= 0) continue;
-            const bevInfo = (p.beverages || []).find(b => b.name === bev.name) || { price: 0, category: 'otro' };
+            const bevIdx = (p.beverages || []).findIndex(
+                b => String(b.name).trim().toLowerCase() === String(bev.name).trim().toLowerCase()
+            );
+            const bevInfo = bevIdx !== -1 ? p.beverages[bevIdx] : { name: bev.name, price: 0, category: 'otro' };
+            const canonicalName = bevInfo.name || bev.name;
             items.push({
-                id: `bev_${bev.name}`,
-                name: bev.name,
+                id: bevIdx !== -1 ? `bev_${bevIdx}` : `bev_${canonicalName}`,
+                name: canonicalName,
                 price: Number(bevInfo.price) || 0,
                 qty,
-                sentQty: findPrevSentQty(x => x.name === bev.name && !x.isPizza, qty),
+                sentQty: findPrevSentQty(
+                    x => !x.isPizza && String(x.name).trim().toLowerCase() === String(canonicalName).trim().toLowerCase(),
+                    qty
+                ),
+                note: '',
+                pizzaSize: 'entera',
                 isPizza: false,
+                isPizzaLibre: false,
+                isEmpanada: false,
+                isPostre: false,
                 isBeverage: true,
                 bevCategory: bevInfo.category || 'otro'
             });

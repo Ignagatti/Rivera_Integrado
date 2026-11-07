@@ -1,5 +1,7 @@
 function getPizzaPrice(toppingName, size, prices) {
-    const pizzaData = prices.preciosPizzas.find(p => p.name === toppingName);
+    const pizzaData = (prices.preciosPizzas || []).find(
+        p => p && String(p.name).trim().toLowerCase() === String(toppingName).trim().toLowerCase()
+    );
     if (!pizzaData) return 0;
     return size === 'entera' ? pizzaData.precioEntera : pizzaData.precioMedia;
 }
@@ -52,7 +54,9 @@ function calculateTotal(order, prices, currentMode) {
     if (Array.isArray(order.beverages) && Array.isArray(prices.beverages)) {
         order.beverages.forEach(bev => {
             if (!bev || !bev.name) return;
-            const priceInfo = prices.beverages.find(p => p && p.name === bev.name);
+            const priceInfo = prices.beverages.find(
+                p => p && String(p.name).trim().toLowerCase() === String(bev.name).trim().toLowerCase()
+            );
             if (priceInfo) total += (Number(bev.quantity) || 0) * (Number(priceInfo.price) || 0);
         });
     }

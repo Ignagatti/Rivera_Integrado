@@ -249,8 +249,9 @@
                                 </div>
                             </div>
                             <div class="pt-2 border-t border-gray-200">
-                                <label for="libre-obs-input" class="block text-xs font-bold text-amber-800 uppercase mb-1">Observación / Gustos que NO quieren</label>
-                                <input type="text" id="libre-obs-input" placeholder="Ej: NO QUIEREN: Sin cebolla, sin anchoas..." class="w-full p-2 border border-amber-300 bg-amber-50 rounded-lg text-xs font-medium text-gray-800">
+                                <label for="libre-obs-input" class="block text-xs font-bold text-amber-800 uppercase mb-1">Observación / Gustos que NO quieren (Pizza Libre)</label>
+                                <div id="libre-obs-chips" class="flex flex-wrap gap-1 mb-2"></div>
+                                <input type="text" id="libre-obs-input" placeholder="Ej: NO QUIEREN: Sin Roquefort, Sin Anchoas..." class="w-full p-2 border border-amber-300 bg-amber-50 rounded-lg text-xs font-medium text-gray-800">
                             </div>
                         </div>
                     </div>
@@ -337,10 +338,6 @@
                             <select id="pizza-topping-3">
                                 <option value="ninguno">Ninguno</option>
                             </select>
-                        </div>
-                        <div>
-                            <label for="pizza-obs-input" class="block text-xs font-bold text-amber-800 uppercase mb-1">Observación / Si no quiere algún ingrediente</label>
-                            <input type="text" id="pizza-obs-input" placeholder="Ej: Sin cebolla, sin aceitunas..." class="w-full p-2 border border-amber-300 bg-amber-50 rounded-lg text-xs font-medium text-gray-800">
                         </div>
                         <button id="add-custom-pizza-btn" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Agregar Pizza</button>
                     </div>
