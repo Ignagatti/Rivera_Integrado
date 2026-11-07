@@ -1,176 +1,176 @@
 document.addEventListener('DOMContentLoaded', async () => {
 
     // ── DOM ──────────────────────────────────────────────────────────────────
-    const kitchenNumberInput  = document.getElementById('kitchen-number-input');
-    const modeSwitcher        = document.getElementById('mode-switcher');
-    const mapaClub            = document.getElementById('mapa-club');
-    const addTableBtn         = document.getElementById('add-table-btn');
-    const managePricesBtn     = document.getElementById('manage-prices-btn');
-    const clearAllOrdersBtn   = document.getElementById('clear-all-orders-btn');
-    const showTotalBtn        = document.getElementById('show-total-btn');
-    const exportPdfBtn        = document.getElementById('export-pdf-btn');
+    const kitchenNumberInput = document.getElementById('kitchen-number-input');
+    const modeSwitcher = document.getElementById('mode-switcher');
+    const mapaClub = document.getElementById('mapa-club');
+    const addTableBtn = document.getElementById('add-table-btn');
+    const managePricesBtn = document.getElementById('manage-prices-btn');
+    const clearAllOrdersBtn = document.getElementById('clear-all-orders-btn');
+    const showTotalBtn = document.getElementById('show-total-btn');
+    const exportPdfBtn = document.getElementById('export-pdf-btn');
 
     // Secciones del modal de pedido
-    const pizzaLibreSection         = document.getElementById('pizza-libre-section');
-    const menuSection               = document.getElementById('menu-section');
+    const pizzaLibreSection = document.getElementById('pizza-libre-section');
+    const menuSection = document.getElementById('menu-section');
     const customPizzaBuilderSection = document.getElementById('custom-pizza-builder-section');
-    const pizzaTopping3Container    = document.getElementById('pizza-topping-3-container');
+    const pizzaTopping3Container = document.getElementById('pizza-topping-3-container');
 
     // Secciones del modal de precios
-    const pricePizzaSection       = document.getElementById('price-pizza-section');
-    const priceMenuSection        = document.getElementById('price-menu-section');
+    const pricePizzaSection = document.getElementById('price-pizza-section');
+    const priceMenuSection = document.getElementById('price-menu-section');
     const priceCustomPizzaSection = document.getElementById('price-custom-pizza-section');
     const priceMenuMiercolesWrapper = document.getElementById('price-menu-miercoles-wrapper');
-    const priceMenuMartesWrapper     = document.getElementById('price-menu-martes-wrapper');
-    const priceMenuViernesWrapper    = document.getElementById('price-menu-viernes-wrapper');
-    const priceMenuDomingoWrapper    = document.getElementById('price-menu-domingo-wrapper');
+    const priceMenuMartesWrapper = document.getElementById('price-menu-martes-wrapper');
+    const priceMenuViernesWrapper = document.getElementById('price-menu-viernes-wrapper');
+    const priceMenuDomingoWrapper = document.getElementById('price-menu-domingo-wrapper');
 
     // Modales
-    const orderModal               = document.getElementById('order-modal');
-    const pricesModal              = document.getElementById('prices-modal');
-    const passwordModal            = document.getElementById('password-modal');
-    const totalModal               = document.getElementById('total-modal');
-    const printSingleAccountModal  = document.getElementById('print-single-account-modal');
-    const genericDataModal         = document.getElementById('generic-data-modal');
-    const salesReportModal         = document.getElementById('sales-report-modal');
-    const salesReportContent       = document.getElementById('sales-report-content');
+    const orderModal = document.getElementById('order-modal');
+    const pricesModal = document.getElementById('prices-modal');
+    const passwordModal = document.getElementById('password-modal');
+    const totalModal = document.getElementById('total-modal');
+    const printSingleAccountModal = document.getElementById('print-single-account-modal');
+    const genericDataModal = document.getElementById('generic-data-modal');
+    const salesReportModal = document.getElementById('sales-report-modal');
+    const salesReportContent = document.getElementById('sales-report-content');
 
     // Botones de modales
-    const closeOrderModalBtn               = document.getElementById('close-order-modal-btn');
-    const closePricesModalBtn              = document.getElementById('close-prices-modal-btn');
-    const closeTotalModalBtn               = document.getElementById('close-total-modal-btn');
-    const closePrintSingleAccountModalBtn  = document.getElementById('close-print-single-account-modal-btn');
-    const closePrintSingleAccountFinalBtn  = document.getElementById('close-print-single-account-final-btn');
-    const printSingleAccountFinalBtn       = document.getElementById('print-single-account-final-btn');
-    const printSinglePreview               = document.getElementById('print-single-preview');
-    const printSingleAccountBtn            = document.getElementById('print-single-account-btn');
-    const closeGenericDataModalBtn         = document.getElementById('close-generic-data-modal-btn');
-    const genericDataBtn                   = document.getElementById('generic-data-btn');
-    const downloadPdfBtn                   = document.getElementById('download-pdf-btn');
-    const closeSalesReportModalBtn         = document.getElementById('close-sales-report-modal-btn');
-    const closeSalesReportFinalBtn         = document.getElementById('close-sales-report-final-btn');
+    const closeOrderModalBtn = document.getElementById('close-order-modal-btn');
+    const closePricesModalBtn = document.getElementById('close-prices-modal-btn');
+    const closeTotalModalBtn = document.getElementById('close-total-modal-btn');
+    const closePrintSingleAccountModalBtn = document.getElementById('close-print-single-account-modal-btn');
+    const closePrintSingleAccountFinalBtn = document.getElementById('close-print-single-account-final-btn');
+    const printSingleAccountFinalBtn = document.getElementById('print-single-account-final-btn');
+    const printSinglePreview = document.getElementById('print-single-preview');
+    const printSingleAccountBtn = document.getElementById('print-single-account-btn');
+    const closeGenericDataModalBtn = document.getElementById('close-generic-data-modal-btn');
+    const genericDataBtn = document.getElementById('generic-data-btn');
+    const downloadPdfBtn = document.getElementById('download-pdf-btn');
+    const closeSalesReportModalBtn = document.getElementById('close-sales-report-modal-btn');
+    const closeSalesReportFinalBtn = document.getElementById('close-sales-report-final-btn');
 
     // Modal Cambio de Día
-    const changeDayModal      = document.getElementById('change-day-modal');
+    const changeDayModal = document.getElementById('change-day-modal');
     const changeDayTargetName = document.getElementById('change-day-target-name');
-    const changeDayClearBtn   = document.getElementById('change-day-clear-btn');
-    const changeDayKeepBtn    = document.getElementById('change-day-keep-btn');
-    const changeDayCancelBtn  = document.getElementById('change-day-cancel-btn');
+    const changeDayClearBtn = document.getElementById('change-day-clear-btn');
+    const changeDayKeepBtn = document.getElementById('change-day-keep-btn');
+    const changeDayCancelBtn = document.getElementById('change-day-cancel-btn');
 
     // Datos genéricos
     const genericEstablishmentNameInput = document.getElementById('generic-establishment-name');
-    const genericAddressInput           = document.getElementById('generic-address');
-    const genericPhoneInput             = document.getElementById('generic-phone');
-    const genericEmailInput             = document.getElementById('generic-email');
-    const genericFooterInput            = document.getElementById('generic-footer');
-    const genericAliasInput             = document.getElementById('generic-alias');
-    const saveGenericDataBtn            = document.getElementById('save-generic-data-btn');
+    const genericAddressInput = document.getElementById('generic-address');
+    const genericPhoneInput = document.getElementById('generic-phone');
+    const genericEmailInput = document.getElementById('generic-email');
+    const genericFooterInput = document.getElementById('generic-footer');
+    const genericAliasInput = document.getElementById('generic-alias');
+    const saveGenericDataBtn = document.getElementById('save-generic-data-btn');
 
     // Contadores del modal de pedido
     const modalTitleContainer = document.getElementById('modal-title-container');
-    const pizzaLibreHCount    = document.getElementById('pizzaLibreH-count');
-    const pizzaLibreMCount    = document.getElementById('pizzaLibreM-count');
-    const pizzaLibreGCount    = document.getElementById('pizzaLibreG-count');
-    const menoresCount        = document.getElementById('menores-count');
-    const menorPriceInput     = document.getElementById('menor-price-input');
-    const empanadasCount      = document.getElementById('empanadas-count');
-    const menuCount           = document.getElementById('menu-count');
-    const postresCount        = document.getElementById('postres-count');
-    const beverageSelect      = document.getElementById('beverage-select');
+    const pizzaLibreHCount = document.getElementById('pizzaLibreH-count');
+    const pizzaLibreMCount = document.getElementById('pizzaLibreM-count');
+    const pizzaLibreGCount = document.getElementById('pizzaLibreG-count');
+    const menoresCount = document.getElementById('menores-count');
+    const menorPriceInput = document.getElementById('menor-price-input');
+    const empanadasCount = document.getElementById('empanadas-count');
+    const menuCount = document.getElementById('menu-count');
+    const postresCount = document.getElementById('postres-count');
+    const beverageSelect = document.getElementById('beverage-select');
     const beverageQuantityInput = document.getElementById('beverage-quantity');
-    const addBeverageBtn      = document.getElementById('add-beverage-btn');
-    const modalOrderList      = document.getElementById('modal-order-list');
-    const modalTotalPrice     = document.getElementById('modal-total-price');
-    const deleteEntityBtn     = document.getElementById('delete-entity-btn');
-    const cleanOrderBtn       = document.getElementById('clean-order-btn');
-    const freePaidTableBtn    = document.getElementById('free-paid-table-btn');
-    const closeAndSaveBtn     = document.getElementById('close-and-save-btn');
+    const addBeverageBtn = document.getElementById('add-beverage-btn');
+    const modalOrderList = document.getElementById('modal-order-list');
+    const modalTotalPrice = document.getElementById('modal-total-price');
+    const deleteEntityBtn = document.getElementById('delete-entity-btn');
+    const cleanOrderBtn = document.getElementById('clean-order-btn');
+    const freePaidTableBtn = document.getElementById('free-paid-table-btn');
+    const closeAndSaveBtn = document.getElementById('close-and-save-btn');
 
     // Inputs de precios
-    const pricePizzaLibreHInput    = document.getElementById('price-pizza-libre-h');
-    const pricePizzaLibreMInput    = document.getElementById('price-pizza-libre-m');
-    const pricePizzaLibreGInput    = document.getElementById('price-pizza-libre-g');
-    const priceEmpanadaInput       = document.getElementById('price-empanada');
-    const pricePostreInput         = document.getElementById('price-postre');
-    const priceMenuMiercolesInput  = document.getElementById('price-menu-miercoles');
-    const priceMenuMartesInput     = document.getElementById('price-menu-martes');
-    const priceMenuViernesInput    = document.getElementById('price-menu-viernes');
-    const priceMenuDomingoInput    = document.getElementById('price-menu-domingo');
-    const beveragesPricesList      = document.getElementById('beverages-prices-list');
-    const newBeverageNameInput     = document.getElementById('new-beverage-name');
-    const newBeveragePriceInput    = document.getElementById('new-beverage-price');
+    const pricePizzaLibreHInput = document.getElementById('price-pizza-libre-h');
+    const pricePizzaLibreMInput = document.getElementById('price-pizza-libre-m');
+    const pricePizzaLibreGInput = document.getElementById('price-pizza-libre-g');
+    const priceEmpanadaInput = document.getElementById('price-empanada');
+    const pricePostreInput = document.getElementById('price-postre');
+    const priceMenuMiercolesInput = document.getElementById('price-menu-miercoles');
+    const priceMenuMartesInput = document.getElementById('price-menu-martes');
+    const priceMenuViernesInput = document.getElementById('price-menu-viernes');
+    const priceMenuDomingoInput = document.getElementById('price-menu-domingo');
+    const beveragesPricesList = document.getElementById('beverages-prices-list');
+    const newBeverageNameInput = document.getElementById('new-beverage-name');
+    const newBeveragePriceInput = document.getElementById('new-beverage-price');
     const newBeverageCategoryInput = document.getElementById('new-beverage-category');
-    const addNewBeveragePriceBtn   = document.getElementById('add-new-beverage-price-btn');
-    const savePricesBtn            = document.getElementById('save-prices-btn');
-    const customPizzaPricesList    = document.getElementById('custom-pizza-prices-list');
-    const newPizzaNameInput        = document.getElementById('new-pizza-name');
-    const addNewPizzaBtn           = document.getElementById('add-new-pizza-btn');
+    const addNewBeveragePriceBtn = document.getElementById('add-new-beverage-price-btn');
+    const savePricesBtn = document.getElementById('save-prices-btn');
+    const customPizzaPricesList = document.getElementById('custom-pizza-prices-list');
+    const newPizzaNameInput = document.getElementById('new-pizza-name');
+    const addNewPizzaBtn = document.getElementById('add-new-pizza-btn');
 
     // Constructor de pizzas y observaciones
     const libreObsInput       = document.getElementById('libre-obs-input');
-    const pizzaSizeSelect     = document.getElementById('pizza-size');
+    const pizzaSizeSelect = document.getElementById('pizza-size');
     const pizzaTopping1Select = document.getElementById('pizza-topping-1');
     const pizzaTopping2Select = document.getElementById('pizza-topping-2');
     const pizzaTopping3Select = document.getElementById('pizza-topping-3');
     const pizzaObsInput       = document.getElementById('pizza-obs-input');
-    const addCustomPizzaBtn   = document.getElementById('add-custom-pizza-btn');
+    const addCustomPizzaBtn = document.getElementById('add-custom-pizza-btn');
 
     // Barra
     const barClientNameInput = document.getElementById('bar-client-name');
-    const addBarOrderBtn     = document.getElementById('add-bar-order-btn');
-    const barOrdersList      = document.getElementById('bar-orders-list');
+    const addBarOrderBtn = document.getElementById('add-bar-order-btn');
+    const barOrdersList = document.getElementById('bar-orders-list');
 
     // Password
-    const passwordTitle       = document.getElementById('password-title');
+    const passwordTitle = document.getElementById('password-title');
     const passwordDescription = document.getElementById('password-description');
-    const passwordInput       = document.getElementById('password-input');
-    const passwordError       = document.getElementById('password-error');
-    const passwordConfirmBtn  = document.getElementById('password-confirm-btn');
-    const passwordCancelBtn   = document.getElementById('password-cancel-btn');
-    const totalModalAmount    = document.getElementById('total-modal-amount');
+    const passwordInput = document.getElementById('password-input');
+    const passwordError = document.getElementById('password-error');
+    const passwordConfirmBtn = document.getElementById('password-confirm-btn');
+    const passwordCancelBtn = document.getElementById('password-cancel-btn');
+    const totalModalAmount = document.getElementById('total-modal-amount');
 
     // Propina & Pago DOM
-    const payBtnIcon                = document.getElementById('pay-btn-icon');
-    const payBtnText                = document.getElementById('pay-btn-text');
-    const modalTipDetail            = document.getElementById('modal-tip-detail');
-    const modalTipAmount            = document.getElementById('modal-tip-amount');
-    
+    const payBtnIcon = document.getElementById('pay-btn-icon');
+    const payBtnText = document.getElementById('pay-btn-text');
+    const modalTipDetail = document.getElementById('modal-tip-detail');
+    const modalTipAmount = document.getElementById('modal-tip-amount');
+
     // Modal Pago
-    const paymentModal              = document.getElementById('payment-modal');
-    const closePaymentModalBtn       = document.getElementById('close-payment-modal-btn');
-    const paymentModalTableTotal    = document.getElementById('payment-modal-table-total');
-    const paymentAmountInput        = document.getElementById('payment-amount-input');
+    const paymentModal = document.getElementById('payment-modal');
+    const closePaymentModalBtn = document.getElementById('close-payment-modal-btn');
+    const paymentModalTableTotal = document.getElementById('payment-modal-table-total');
+    const paymentAmountInput = document.getElementById('payment-amount-input');
     const paymentModalCalculatedTip = document.getElementById('payment-modal-calculated-tip');
-    const paymentUnpayBtn           = document.getElementById('payment-unpay-btn');
-    const paymentConfirmBtn         = document.getElementById('payment-confirm-btn');
-    const totalModalPropinaCount    = document.getElementById('total-modal-propina-count');
+    const paymentUnpayBtn = document.getElementById('payment-unpay-btn');
+    const paymentConfirmBtn = document.getElementById('payment-confirm-btn');
+    const totalModalPropinaCount = document.getElementById('total-modal-propina-count');
 
     // Conteo de Personas DOM
-    const totalPersonasCard        = document.getElementById('total-personas-card');
-    const totalPersonasCount       = document.getElementById('total-personas-count');
-    const totalPersonasBreakdown   = document.getElementById('total-personas-breakdown');
-    const totalModalPersonasBox    = document.getElementById('total-modal-personas-box');
-    const totalModalPersonasCount  = document.getElementById('total-modal-personas-count');
+    const totalPersonasCard = document.getElementById('total-personas-card');
+    const totalPersonasCount = document.getElementById('total-personas-count');
+    const totalPersonasBreakdown = document.getElementById('total-personas-breakdown');
+    const totalModalPersonasBox = document.getElementById('total-modal-personas-box');
+    const totalModalPersonasCount = document.getElementById('total-modal-personas-count');
     const totalModalPersonasDetail = document.getElementById('total-modal-personas-detail');
 
     // Categorías de bebidas organizadas
     const BEVERAGE_CATEGORIES = [
-        { id: 'vino',       label: 'Vinos',            icon: '🍷' },
-        { id: 'cerveza',    label: 'Cervezas',         icon: '🍺' },
-        { id: 'gaseosa',    label: 'Gaseosas',         icon: '🥤' },
-        { id: 'agua',       label: 'Aguas',            icon: '💧' },
-        { id: 'saborizada', label: 'Aguas Saborizadas',icon: '🍊' },
-        { id: 'jarro',      label: 'Jarros / Tragos',  icon: '🍹' },
-        { id: 'otro',       label: 'Otras Bebidas',    icon: '📦' }
+        { id: 'vino', label: 'Vinos', icon: '🍷' },
+        { id: 'cerveza', label: 'Cervezas', icon: '🍺' },
+        { id: 'gaseosa', label: 'Gaseosas', icon: '🥤' },
+        { id: 'agua', label: 'Aguas', icon: '💧' },
+        { id: 'saborizada', label: 'Aguas Saborizadas', icon: '🍊' },
+        { id: 'jarro', label: 'Jarros / Tragos', icon: '🍹' },
+        { id: 'otro', label: 'Otras Bebidas', icon: '📦' }
     ];
 
     // ── UI STATE (no se persiste) ─────────────────────────────────────────────
-    let activeEntity       = null;
+    let activeEntity = null;
     let orderBeforeChanges = null;
-    let actionToConfirm    = null;
+    let actionToConfirm = null;
     let currentSalesReport = null;
-    let pendingNewMode     = null;
-    let modeBeforeChange   = null;
+    let pendingNewMode = null;
+    let modeBeforeChange = null;
 
     // ── HELPERS ───────────────────────────────────────────────────────────────
     function escapeHtml(str) {
@@ -200,25 +200,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function getBeverageColor(name, category = 'otro') {
         switch (resolveBeverageCategory(name, category)) {
-            case 'agua':       return 'bg-blue-200 border-blue-500';
+            case 'agua': return 'bg-blue-200 border-blue-500';
             case 'saborizada': return 'bg-orange-200 border-orange-500';
-            case 'gaseosa':    return 'bg-red-200 border-red-500';
-            case 'cerveza':    return 'bg-yellow-200 border-yellow-500';
-            case 'vino':       return 'bg-purple-200 border-purple-500';
-            case 'jarro':      return 'bg-indigo-200 border-indigo-500 text-indigo-900';
-            default:           return 'bg-gray-100 border-gray-400';
+            case 'gaseosa': return 'bg-red-200 border-red-500';
+            case 'cerveza': return 'bg-yellow-200 border-yellow-500';
+            case 'vino': return 'bg-purple-200 border-purple-500';
+            case 'jarro': return 'bg-indigo-200 border-indigo-500 text-indigo-900';
+            default: return 'bg-gray-100 border-gray-400';
         }
     }
 
     function getBeverageOptionStyle(name, category = 'otro') {
         switch (resolveBeverageCategory(name, category)) {
-            case 'agua':       return { bg: '#90CDF4', text: '#2A4365' };
+            case 'agua': return { bg: '#90CDF4', text: '#2A4365' };
             case 'saborizada': return { bg: '#FBD38D', text: '#9C4221' };
-            case 'gaseosa':    return { bg: '#FC8181', text: '#9B2C2C' };
-            case 'cerveza':    return { bg: '#F0E68C', text: '#975A16' };
-            case 'vino':       return { bg: '#B794F4', text: '#44337A' };
-            case 'jarro':      return { bg: '#C3DAFE', text: '#2C5282' };
-            default:           return { bg: '#FFFFFF', text: '#1A202C' };
+            case 'gaseosa': return { bg: '#FC8181', text: '#9B2C2C' };
+            case 'cerveza': return { bg: '#F0E68C', text: '#975A16' };
+            case 'vino': return { bg: '#B794F4', text: '#44337A' };
+            case 'jarro': return { bg: '#C3DAFE', text: '#2C5282' };
+            default: return { bg: '#FFFFFF', text: '#1A202C' };
         }
     }
 
@@ -226,21 +226,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateUIMode(mode) {
         const isPizzaLibre = mode === 'jueves' || mode === 'sabado';
 
-        pizzaLibreSection.style.display         = isPizzaLibre ? 'block' : 'none';
-        menuSection.style.display               = isPizzaLibre ? 'none'  : 'block';
+        pizzaLibreSection.style.display = isPizzaLibre ? 'block' : 'none';
+        menuSection.style.display = isPizzaLibre ? 'none' : 'block';
         customPizzaBuilderSection.style.display = isPizzaLibre ? 'block' : 'none';
 
-        pricePizzaSection.style.display       = isPizzaLibre ? 'block' : 'none';
-        priceMenuSection.style.display        = isPizzaLibre ? 'none'  : 'block';
+        pricePizzaSection.style.display = isPizzaLibre ? 'block' : 'none';
+        priceMenuSection.style.display = isPizzaLibre ? 'none' : 'block';
         priceCustomPizzaSection.style.display = isPizzaLibre ? 'block' : 'none';
 
         [priceMenuMartesWrapper, priceMenuMiercolesWrapper,
-         priceMenuViernesWrapper, priceMenuDomingoWrapper].forEach(w => { if (w) w.style.display = 'none'; });
+            priceMenuViernesWrapper, priceMenuDomingoWrapper].forEach(w => { if (w) w.style.display = 'none'; });
 
-        if (mode === 'martes'    && priceMenuMartesWrapper)    priceMenuMartesWrapper.style.display    = 'block';
+        if (mode === 'martes' && priceMenuMartesWrapper) priceMenuMartesWrapper.style.display = 'block';
         if (mode === 'miercoles' && priceMenuMiercolesWrapper) priceMenuMiercolesWrapper.style.display = 'block';
-        if (mode === 'viernes'   && priceMenuViernesWrapper)   priceMenuViernesWrapper.style.display   = 'block';
-        if (mode === 'domingo'   && priceMenuDomingoWrapper)   priceMenuDomingoWrapper.style.display   = 'block';
+        if (mode === 'viernes' && priceMenuViernesWrapper) priceMenuViernesWrapper.style.display = 'block';
+        if (mode === 'domingo' && priceMenuDomingoWrapper) priceMenuDomingoWrapper.style.display = 'block';
 
         updateTotalPersonsUI();
     }
@@ -301,9 +301,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const bgClass = isPaid ? 'bg-emerald-600 border-emerald-800' : 'bg-blue-500 border-blue-700';
 
             el.className = `mesa absolute ${bgClass} border-2 rounded-lg flex flex-col items-center justify-center text-white font-bold cursor-grab select-none p-1 shadow-md transition-colors duration-200 overflow-hidden`;
-            el.style.left   = `${table.x}px`;
-            el.style.top    = `${table.y}px`;
-            el.style.width  = `${table.width}px`;
+            el.style.left = `${table.x}px`;
+            el.style.top = `${table.y}px`;
+            el.style.width = `${table.width}px`;
             el.style.height = `${table.height}px`;
 
             const w = table.width || 100;
@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderBarOrders() {
         barOrdersList.innerHTML = '';
         appState.barOrders.forEach(order => {
-            const el    = document.createElement('div');
+            const el = document.createElement('div');
             el.className = 'bg-gray-100 p-3 rounded-lg cursor-pointer hover:bg-gray-200';
             const total = calculateTotal(order.order, appState.prices, appState.currentMode);
             el.innerHTML = `<div class="flex justify-between items-center"><span class="font-semibold">${order.clientName}</span><span class="font-bold text-gray-700">$${formatPrice(total)}</span></div>`;
@@ -381,7 +381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderOrderList() {
         modalOrderList.innerHTML = '';
         const order = activeEntity.order;
-        const mode  = appState.currentMode;
+        const mode = appState.currentMode;
 
         const hasLibre = (order.pizzaLibreH || 0) + (order.pizzaLibreM || 0) + (order.pizzaLibreG || 0) > 0;
         if (mode === 'jueves' || mode === 'sabado' || hasLibre) {
@@ -397,8 +397,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (order.menu > 0) modalOrderList.innerHTML += `<div class="order-item-food">${order.menu} x Menú</div>`;
         }
         if (order.empanadas > 0) modalOrderList.innerHTML += `<div class="order-item-food">${order.empanadas} x Empanada</div>`;
-        if (order.menores   > 0) modalOrderList.innerHTML += `<div class="order-item-food">${order.menores} x Menor — $${formatPrice((order.menores||0)*(order.menorPrice||0))}</div>`;
-        if (order.postres   > 0) modalOrderList.innerHTML += `<div class="order-item-food">${order.postres} x Postre</div>`;
+        if (order.menores > 0) modalOrderList.innerHTML += `<div class="order-item-food">${order.menores} x Menor — $${formatPrice((order.menores || 0) * (order.menorPrice || 0))}</div>`;
+        if (order.postres > 0) modalOrderList.innerHTML += `<div class="order-item-food">${order.postres} x Postre</div>`;
 
         if (order.pizzasPersonalizadas && order.pizzasPersonalizadas.length > 0) {
             order.pizzasPersonalizadas.forEach((pizza, index) => {
@@ -420,11 +420,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         order.beverages.forEach((bev, index) => {
-            const bevEl      = document.createElement('div');
-            const bevInfo    = appState.prices.beverages.find(b => b.name === bev.name) || {};
-            const colorCls   = getBeverageColor(bev.name, bevInfo.category);
-            bevEl.className  = `order-item-bev flex justify-between items-center ${colorCls}`;
-            bevEl.innerHTML  = `
+            const bevEl = document.createElement('div');
+            const bevInfo = appState.prices.beverages.find(b => b.name === bev.name) || {};
+            const colorCls = getBeverageColor(bev.name, bevInfo.category);
+            bevEl.className = `order-item-bev flex justify-between items-center ${colorCls}`;
+            bevEl.innerHTML = `
                 <span class="font-medium ${colorCls.includes('text-white') ? 'text-white' : 'text-gray-800'}">${bev.quantity} x ${bev.name}</span>
                 <div class="flex items-center space-x-1">
                     <button data-index="${index}" class="decrease-bev-btn w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded-full font-bold shadow-sm hover:bg-red-600 transition" title="Quitar 1">-</button>
@@ -444,11 +444,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (libreObsInput && document.activeElement !== libreObsInput) {
             libreObsInput.value = order.libreObs || activeEntity.note || '';
         }
-        if (menoresCount)    menoresCount.textContent = order.menores || 0;
-        if (menorPriceInput) menorPriceInput.value    = (order.menorPrice !== undefined && order.menorPrice !== null) ? order.menorPrice : '';
+        if (menoresCount) menoresCount.textContent = order.menores || 0;
+        if (menorPriceInput) menorPriceInput.value = (order.menorPrice !== undefined && order.menorPrice !== null) ? order.menorPrice : '';
         empanadasCount.textContent = order.empanadas || 0;
-        menuCount.textContent      = order.menu      || 0;
-        postresCount.textContent   = order.postres   || 0;
+        menuCount.textContent = order.menu || 0;
+        postresCount.textContent = order.postres || 0;
 
         beverageSelect.innerHTML = '<option value="" disabled selected>-- Seleccionar bebida --</option>';
         BEVERAGE_CATEGORIES.forEach(cat => {
@@ -464,7 +464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     opt.textContent = `${bev.name} - $${formatPrice(bev.price)}`;
                     const style = getBeverageOptionStyle(bev.name, bev.category);
                     opt.style.backgroundColor = style.bg;
-                    opt.style.color           = style.text;
+                    opt.style.color = style.text;
                     groupEl.appendChild(opt);
                 });
                 beverageSelect.appendChild(groupEl);
@@ -560,7 +560,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         if (activeEntity && orderBeforeChanges) {
-            const name    = activeEntity.id.startsWith('table-') ? `Mesa ${activeEntity.number}` : activeEntity.clientName;
+            const name = activeEntity.id.startsWith('table-') ? `Mesa ${activeEntity.number}` : activeEntity.clientName;
             const message = generateOrderMessage(orderBeforeChanges, activeEntity.order, name);
             if (message) sendWhatsAppMessage(message);
 
@@ -570,7 +570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     oldOrder: orderBeforeChanges,
                     newOrder: activeEntity.order,
                     prices: appState.prices
-                }).catch(() => {});
+                }).catch(() => { });
             }
         }
         saveState();
@@ -586,12 +586,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         passwordInput.value = '';
         passwordError.classList.add('hidden');
         const titles = {
-            deleteTable:     { t: 'Eliminar Mesa',          d: 'Para eliminar la mesa, ingresa la clave.' },
-            clearSingleOrder:{ t: 'Limpiar Pedido',         d: 'Para limpiar este pedido, ingresa la clave.' },
-            clearAllOrders:  { t: 'Limpiar Todos los Pedidos', d: 'Para limpiar todos los pedidos, ingresa la clave.' }
+            deleteTable: { t: 'Eliminar Mesa', d: 'Para eliminar la mesa, ingresa la clave.' },
+            clearSingleOrder: { t: 'Limpiar Pedido', d: 'Para limpiar este pedido, ingresa la clave.' },
+            clearAllOrders: { t: 'Limpiar Todos los Pedidos', d: 'Para limpiar todos los pedidos, ingresa la clave.' }
         };
         const info = titles[action] || { t: 'Verificación', d: 'Ingresá la clave.' };
-        passwordTitle.textContent       = info.t;
+        passwordTitle.textContent = info.t;
         passwordDescription.textContent = info.d;
         passwordModal.style.display = 'flex';
     }
@@ -610,15 +610,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function openPricesModal() {
-        pricePizzaLibreHInput.value   = appState.prices.pizzaLibreH;
-        pricePizzaLibreMInput.value   = appState.prices.pizzaLibreM;
-        pricePizzaLibreGInput.value   = appState.prices.pizzaLibreG || 0;
-        priceEmpanadaInput.value      = appState.prices.empanada;
-        pricePostreInput.value        = appState.prices.precioPostre;
-        priceMenuMartesInput.value    = appState.prices.precioMenuMartes;
+        pricePizzaLibreHInput.value = appState.prices.pizzaLibreH;
+        pricePizzaLibreMInput.value = appState.prices.pizzaLibreM;
+        pricePizzaLibreGInput.value = appState.prices.pizzaLibreG || 0;
+        priceEmpanadaInput.value = appState.prices.empanada;
+        pricePostreInput.value = appState.prices.precioPostre;
+        priceMenuMartesInput.value = appState.prices.precioMenuMartes;
         priceMenuMiercolesInput.value = appState.prices.precioMenuMiercoles;
-        priceMenuViernesInput.value   = appState.prices.precioMenuViernes;
-        priceMenuDomingoInput.value   = appState.prices.precioMenuDomingo;
+        priceMenuViernesInput.value = appState.prices.precioMenuViernes;
+        priceMenuDomingoInput.value = appState.prices.precioMenuDomingo;
         renderBeveragePrices();
         renderCustomPizzaPrices();
         pricesModal.style.display = 'flex';
@@ -679,17 +679,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderCustomPizzaPrices() {
         customPizzaPricesList.innerHTML = '';
         appState.prices.preciosPizzas.forEach((pizza, index) => {
-            const item     = document.createElement('div');
+            const item = document.createElement('div');
             item.className = 'flex items-center justify-between bg-white shadow-xs p-2 border border-gray-200 rounded-lg gap-2';
             item.innerHTML = `
                 <span class="flex-grow font-medium text-gray-800 text-sm truncate mr-2">${escapeHtml(pizza.name)}</span>
                 <div class="flex items-center space-x-1">
                     <span class="text-xs text-gray-500 font-bold">$</span>
-                    <input type="number" value="${formatPrice(pizza.precioEntera||0)}" data-pizza-index="${index}" data-price-type="entera" class="pizza-price-input w-20 p-1 border rounded-lg text-right font-bold text-sm" placeholder="Entera">
+                    <input type="number" value="${formatPrice(pizza.precioEntera || 0)}" data-pizza-index="${index}" data-price-type="entera" class="pizza-price-input w-20 p-1 border rounded-lg text-right font-bold text-sm" placeholder="Entera">
                 </div>
                 <div class="flex items-center space-x-1">
                     <span class="text-xs text-gray-500 font-bold">$</span>
-                    <input type="number" value="${formatPrice(pizza.precioMedia ||0)}" data-pizza-index="${index}" data-price-type="media"  class="pizza-price-input w-20 p-1 border rounded-lg text-right font-bold text-sm" placeholder="Media">
+                    <input type="number" value="${formatPrice(pizza.precioMedia || 0)}" data-pizza-index="${index}" data-price-type="media"  class="pizza-price-input w-20 p-1 border rounded-lg text-right font-bold text-sm" placeholder="Media">
                 </div>
                 <button data-index="${index}" class="delete-pizza-price-btn text-red-500 font-bold p-1 ml-1 hover:text-red-700 text-lg transition" title="Eliminar gusto">&times;</button>
             `;
@@ -700,27 +700,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── WHATSAPP ──────────────────────────────────────────────────────────────
     function generateOrderMessage(oldOrder, newOrder, entityName) {
         const parts = [];
-        const mode  = appState.currentMode;
+        const mode = appState.currentMode;
 
         if (mode === 'jueves' || mode === 'sabado') {
-            const dH = (newOrder.pizzaLibreH||0) - (oldOrder.pizzaLibreH||0);
-            const dM = (newOrder.pizzaLibreM||0) - (oldOrder.pizzaLibreM||0);
-            const dG = (newOrder.pizzaLibreG||0) - (oldOrder.pizzaLibreG||0);
+            const dH = (newOrder.pizzaLibreH || 0) - (oldOrder.pizzaLibreH || 0);
+            const dM = (newOrder.pizzaLibreM || 0) - (oldOrder.pizzaLibreM || 0);
+            const dG = (newOrder.pizzaLibreG || 0) - (oldOrder.pizzaLibreG || 0);
             if (dH > 0) parts.push(`+${dH} Libre Hombres`);
             if (dM > 0) parts.push(`+${dM} Libre Mujeres`);
             if (dG > 0) parts.push(`+${dG} Libre General`);
 
-            const dP = (newOrder.pizzasPersonalizadas?.length||0) - (oldOrder.pizzasPersonalizadas?.length||0);
+            const dP = (newOrder.pizzasPersonalizadas?.length || 0) - (oldOrder.pizzasPersonalizadas?.length || 0);
             if (dP > 0) parts.push(`+${dP} Pizzas Nuevas`);
         } else {
-            const dMenu = (newOrder.menu||0) - (oldOrder.menu||0);
+            const dMenu = (newOrder.menu || 0) - (oldOrder.menu || 0);
             if (dMenu > 0) parts.push(`+${dMenu} Menú`);
         }
 
-        const dEmp = (newOrder.empanadas||0) - (oldOrder.empanadas||0);
+        const dEmp = (newOrder.empanadas || 0) - (oldOrder.empanadas || 0);
         if (dEmp > 0) parts.push(`+${dEmp} Empanadas`);
 
-        const dPostre = (newOrder.postres||0) - (oldOrder.postres||0);
+        const dPostre = (newOrder.postres || 0) - (oldOrder.postres || 0);
         if (dPostre > 0) parts.push(`+${dPostre} Postres`);
 
         return parts.length > 0 ? `*${entityName}:* ${parts.join(', ')}` : null;
@@ -767,10 +767,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── IMPRESIÓN ─────────────────────────────────────────────────────────────
     function getMenuPrice() {
         const m = appState.currentMode;
-        if (m === 'martes')    return appState.prices.precioMenuMartes;
+        if (m === 'martes') return appState.prices.precioMenuMartes;
         if (m === 'miercoles') return appState.prices.precioMenuMiercoles;
-        if (m === 'viernes')   return appState.prices.precioMenuViernes;
-        if (m === 'domingo')   return appState.prices.precioMenuDomingo;
+        if (m === 'viernes') return appState.prices.precioMenuViernes;
+        if (m === 'domingo') return appState.prices.precioMenuDomingo;
         return 0;
     }
 
@@ -782,7 +782,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         header.className = 'text-center mb-4 pb-4 border-b-2';
 
         const titleEl = document.createElement('h1');
-        titleEl.className   = 'text-2xl font-bold';
+        titleEl.className = 'text-2xl font-bold';
         titleEl.textContent = appState.genericData.establishmentName;
         header.appendChild(titleEl);
 
@@ -810,7 +810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         printSinglePreview.appendChild(header);
 
         const clientTitle = document.createElement('h2');
-        clientTitle.className   = 'text-xl font-bold text-center mt-4 mb-4';
+        clientTitle.className = 'text-xl font-bold text-center mt-4 mb-4';
         clientTitle.textContent = activeEntity.id.startsWith('table-')
             ? `MESA ${activeEntity.number}`
             : `PEDIDO: ${activeEntity.clientName}`;
@@ -831,14 +831,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (order.pizzaLibreH > 0) addItem(`${order.pizzaLibreH} x Pizza Libre Hombres`, order.pizzaLibreH * appState.prices.pizzaLibreH);
         if (order.pizzaLibreM > 0) addItem(`${order.pizzaLibreM} x Pizza Libre Mujeres`, order.pizzaLibreM * appState.prices.pizzaLibreM);
         if (order.pizzaLibreG > 0) addItem(`${order.pizzaLibreG} x Pizza Libre General`, order.pizzaLibreG * appState.prices.pizzaLibreG);
-        if (order.menores     > 0) addItem(`${order.menores} x Menor`, order.menores * (order.menorPrice || 0));
-        if (order.menu        > 0) addItem(`${order.menu} x Menú`,     order.menu    * getMenuPrice());
-        if (order.empanadas   > 0) addItem(`${order.empanadas} x Empanada`, order.empanadas * appState.prices.empanada);
-        if (order.postres     > 0) addItem(`${order.postres} x Postre`, order.postres * appState.prices.precioPostre);
+        if (order.menores > 0) addItem(`${order.menores} x Menor`, order.menores * (order.menorPrice || 0));
+        if (order.menu > 0) addItem(`${order.menu} x Menú`, order.menu * getMenuPrice());
+        if (order.empanadas > 0) addItem(`${order.empanadas} x Empanada`, order.empanadas * appState.prices.empanada);
+        if (order.postres > 0) addItem(`${order.postres} x Postre`, order.postres * appState.prices.precioPostre);
 
         if (order.pizzasPersonalizadas && order.pizzasPersonalizadas.length > 0) {
             order.pizzasPersonalizadas.forEach(pizza => {
-                const p    = document.createElement('p');
+                const p = document.createElement('p');
                 p.className = 'flex justify-between';
                 p.innerHTML = `<span>1 x Pizza ${pizza.size} (${pizza.toppings.join(', ')})</span><span>$ ${formatPrice(calculatePizzaPrice(pizza, appState.prices))}</span>`;
                 detailDiv.appendChild(p);
@@ -856,17 +856,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const totalDiv = document.createElement('div');
         totalDiv.className = 'mt-4 pt-4 border-t-2 border-black text-center';
-        const totalAmt  = calculateTotal(order, appState.prices, appState.currentMode);
-        const lblEl     = document.createElement('p');
+        const totalAmt = calculateTotal(order, appState.prices, appState.currentMode);
+        const lblEl = document.createElement('p');
         lblEl.className = 'text-lg font-bold'; lblEl.textContent = 'TOTAL';
-        const valEl     = document.createElement('p');
+        const valEl = document.createElement('p');
         valEl.className = 'text-3xl font-bold text-green-600'; valEl.textContent = `$ ${formatPrice(totalAmt)}`;
         totalDiv.appendChild(lblEl); totalDiv.appendChild(valEl);
         printSinglePreview.appendChild(totalDiv);
 
         if (appState.genericData.footer) {
             const footerDiv = document.createElement('div');
-            footerDiv.className   = 'text-center mt-6 pt-4 border-t text-sm text-gray-600';
+            footerDiv.className = 'text-center mt-6 pt-4 border-t text-sm text-gray-600';
             footerDiv.textContent = appState.genericData.footer;
             printSinglePreview.appendChild(footerDiv);
         }
@@ -906,7 +906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function hasActiveOrders() {
         const hasTableOrders = appState.tables.some(table => isOrderNotEmpty(table.order));
-        const hasBarOrders   = appState.barOrders && appState.barOrders.some(bar => isOrderNotEmpty(bar.order));
+        const hasBarOrders = appState.barOrders && appState.barOrders.some(bar => isOrderNotEmpty(bar.order));
         return hasTableOrders || hasBarOrders;
     }
 
@@ -994,7 +994,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         changeDayCancelBtn.addEventListener('click', () => {
             if (modeBeforeChange) {
                 appState.currentMode = modeBeforeChange;
-                modeSwitcher.value   = modeBeforeChange;
+                modeSwitcher.value = modeBeforeChange;
             }
             closeChangeDayModal();
         });
@@ -1067,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (target.classList.contains('op-btn')) {
-            const type   = target.dataset.type;
+            const type = target.dataset.type;
             const action = target.dataset.action;
             if (action === 'increase') {
                 if (!activeEntity.order[type]) activeEntity.order[type] = 0;
@@ -1118,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     addCustomPizzaBtn.addEventListener('click', () => {
-        const size     = pizzaSizeSelect.value;
+        const size = pizzaSizeSelect.value;
         const topping1 = pizzaTopping1Select.value;
         const topping2 = pizzaTopping2Select.value;
         const topping3 = pizzaTopping3Select.value;
@@ -1135,12 +1135,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     addBeverageBtn.addEventListener('click', () => {
-        const name     = beverageSelect.value;
+        const name = beverageSelect.value;
         const quantity = parseInt(beverageQuantityInput.value);
         if (!name || quantity <= 0) return;
         const existing = activeEntity.order.beverages.find(b => b.name === name);
         if (existing) { existing.quantity += quantity; }
-        else          { activeEntity.order.beverages.push({ name, quantity }); }
+        else { activeEntity.order.beverages.push({ name, quantity }); }
         beverageQuantityInput.value = 1;
         updateOrderModalUI();
         saveState();
@@ -1176,18 +1176,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     function openPaymentModal() {
         if (!activeEntity) return;
         const currentTotal = calculateTotal(activeEntity.order, appState.prices, appState.currentMode);
-        
+
         if (paymentModalTableTotal) paymentModalTableTotal.textContent = `$${formatPrice(currentTotal)}`;
-        
+
         const existingPaid = activeEntity.paidAmount;
         if (paymentAmountInput) {
             paymentAmountInput.value = (existingPaid !== undefined && existingPaid !== null && existingPaid > 0)
                 ? existingPaid
                 : (currentTotal > 0 ? currentTotal : '');
         }
-        
+
         const initialPaid = parseFloat(paymentAmountInput ? paymentAmountInput.value : 0) || 0;
-        const initialTip  = Math.max(0, initialPaid - currentTotal);
+        const initialTip = Math.max(0, initialPaid - currentTotal);
         if (paymentModalCalculatedTip) paymentModalCalculatedTip.textContent = `$${formatPrice(initialTip)}`;
 
         if (paymentUnpayBtn) {
@@ -1247,7 +1247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!activeEntity) return;
             const currentTotal = calculateTotal(activeEntity.order, appState.prices, appState.currentMode);
             const paid = parseFloat(paymentAmountInput.value) || 0;
-            const tip  = Math.max(0, paid - currentTotal);
+            const tip = Math.max(0, paid - currentTotal);
             if (paymentModalCalculatedTip) paymentModalCalculatedTip.textContent = `$${formatPrice(tip)}`;
         });
     }
@@ -1340,8 +1340,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     addNewBeveragePriceBtn.addEventListener('click', () => {
-        const name     = newBeverageNameInput.value.trim();
-        const price    = parseFloat(newBeveragePriceInput.value);
+        const name = newBeverageNameInput.value.trim();
+        const price = parseFloat(newBeveragePriceInput.value);
         const category = newBeverageCategoryInput.value || 'otro';
         if (name && !isNaN(price)) {
             const newBev = { name, price, category };
@@ -1362,7 +1362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 appState.prices.beverages.push(newBev);
             }
 
-            newBeverageNameInput.value  = '';
+            newBeverageNameInput.value = '';
             newBeveragePriceInput.value = '';
             renderBeveragePrices();
         }
@@ -1400,29 +1400,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     savePricesBtn.addEventListener('click', () => {
-        appState.prices.pizzaLibreH          = parseFloat(pricePizzaLibreHInput.value)   || 0;
-        appState.prices.pizzaLibreM          = parseFloat(pricePizzaLibreMInput.value)   || 0;
-        appState.prices.pizzaLibreG          = parseFloat(pricePizzaLibreGInput.value)   || 0;
-        appState.prices.empanada             = parseFloat(priceEmpanadaInput.value)      || 0;
-        appState.prices.precioPostre         = parseFloat(pricePostreInput.value)        || 0;
-        appState.prices.precioMenuMartes     = parseFloat(priceMenuMartesInput.value)    || 0;
-        appState.prices.precioMenuMiercoles  = parseFloat(priceMenuMiercolesInput.value) || 0;
-        appState.prices.precioMenuViernes    = parseFloat(priceMenuViernesInput.value)   || 0;
-        appState.prices.precioMenuDomingo    = parseFloat(priceMenuDomingoInput.value)   || 0;
+        appState.prices.pizzaLibreH = parseFloat(pricePizzaLibreHInput.value) || 0;
+        appState.prices.pizzaLibreM = parseFloat(pricePizzaLibreMInput.value) || 0;
+        appState.prices.pizzaLibreG = parseFloat(pricePizzaLibreGInput.value) || 0;
+        appState.prices.empanada = parseFloat(priceEmpanadaInput.value) || 0;
+        appState.prices.precioPostre = parseFloat(pricePostreInput.value) || 0;
+        appState.prices.precioMenuMartes = parseFloat(priceMenuMartesInput.value) || 0;
+        appState.prices.precioMenuMiercoles = parseFloat(priceMenuMiercolesInput.value) || 0;
+        appState.prices.precioMenuViernes = parseFloat(priceMenuViernesInput.value) || 0;
+        appState.prices.precioMenuDomingo = parseFloat(priceMenuDomingoInput.value) || 0;
 
         document.querySelectorAll('#beverages-prices-list .bev-price-input').forEach(input => {
-            const idx      = parseInt(input.dataset.index);
+            const idx = parseInt(input.dataset.index);
             const newPrice = parseFloat(input.value);
             if (!isNaN(newPrice) && appState.prices.beverages[idx]) appState.prices.beverages[idx].price = newPrice;
         });
 
         document.querySelectorAll('#custom-pizza-prices-list .pizza-price-input').forEach(input => {
-            const idx      = parseInt(input.dataset.pizzaIndex);
-            const type     = input.dataset.priceType;
+            const idx = parseInt(input.dataset.pizzaIndex);
+            const type = input.dataset.priceType;
             const newPrice = parseFloat(input.value);
             if (!isNaN(newPrice) && appState.prices.preciosPizzas[idx]) {
                 if (type === 'entera') appState.prices.preciosPizzas[idx].precioEntera = newPrice;
-                if (type === 'media')  appState.prices.preciosPizzas[idx].precioMedia  = newPrice;
+                if (type === 'media') appState.prices.preciosPizzas[idx].precioMedia = newPrice;
             }
         });
 
@@ -1465,21 +1465,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     genericDataBtn.addEventListener('click', () => {
         genericEstablishmentNameInput.value = appState.genericData.establishmentName;
-        genericAddressInput.value           = appState.genericData.address;
-        genericPhoneInput.value             = appState.genericData.phone;
-        genericEmailInput.value             = appState.genericData.email;
-        genericFooterInput.value            = appState.genericData.footer;
-        genericAliasInput.value             = appState.genericData.alias || '';
+        genericAddressInput.value = appState.genericData.address;
+        genericPhoneInput.value = appState.genericData.phone;
+        genericEmailInput.value = appState.genericData.email;
+        genericFooterInput.value = appState.genericData.footer;
+        genericAliasInput.value = appState.genericData.alias || '';
         genericDataModal.style.display = 'flex';
     });
 
     saveGenericDataBtn.addEventListener('click', () => {
         appState.genericData.establishmentName = genericEstablishmentNameInput.value;
-        appState.genericData.address           = genericAddressInput.value;
-        appState.genericData.phone             = genericPhoneInput.value;
-        appState.genericData.email             = genericEmailInput.value;
-        appState.genericData.footer            = genericFooterInput.value;
-        appState.genericData.alias             = genericAliasInput.value;
+        appState.genericData.address = genericAddressInput.value;
+        appState.genericData.phone = genericPhoneInput.value;
+        appState.genericData.email = genericEmailInput.value;
+        appState.genericData.footer = genericFooterInput.value;
+        appState.genericData.alias = genericAliasInput.value;
         saveState();
         genericDataModal.style.display = 'none';
     });
@@ -1526,18 +1526,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const order = activeEntity.order;
         let bodyHtml = '';
 
-        bodyHtml += `<div style="text-align:center;"><div style="font-weight:700;font-size:15px;">${escapeHtml(appState.genericData.establishmentName||'')}</div></div>`;
+        bodyHtml += `<div style="text-align:center;"><div style="font-weight:700;font-size:15px;">${escapeHtml(appState.genericData.establishmentName || '')}</div></div>`;
         bodyHtml += `<div>`;
         if (appState.genericData.address) bodyHtml += `<div style="font-size:11px;">${escapeHtml(appState.genericData.address)}</div>`;
-        if (appState.genericData.phone)   bodyHtml += `<div style="font-size:11px;">Tel: ${escapeHtml(appState.genericData.phone)}</div>`;
-        if (appState.genericData.email)   bodyHtml += `<div style="font-size:11px;">${escapeHtml(appState.genericData.email)}</div>`;
-        
+        if (appState.genericData.phone) bodyHtml += `<div style="font-size:11px;">Tel: ${escapeHtml(appState.genericData.phone)}</div>`;
+        if (appState.genericData.email) bodyHtml += `<div style="font-size:11px;">${escapeHtml(appState.genericData.email)}</div>`;
+
         if (appState.genericData.alias) {
-             bodyHtml += `<div style="margin: 4px 0; font-size: 12px;">`;
-             bodyHtml += `<strong>ALIAS:</strong> ${escapeHtml(appState.genericData.alias)}`;
-             bodyHtml += `</div>`;
+            bodyHtml += `<div style="margin: 4px 0; font-size: 12px;">`;
+            bodyHtml += `<strong>ALIAS:</strong> ${escapeHtml(appState.genericData.alias)}`;
+            bodyHtml += `</div>`;
         }
-        
+
         bodyHtml += '<hr style="border:none;border-top:1.5px dashed #000;margin:8px 0;"/></div>';
 
         bodyHtml += activeEntity.id.startsWith('table-')
@@ -1552,10 +1552,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (order.pizzaLibreH > 0) bodyHtml += line(`${order.pizzaLibreH} x Pizza Libre Hombres`, order.pizzaLibreH * appState.prices.pizzaLibreH);
         if (order.pizzaLibreM > 0) bodyHtml += line(`${order.pizzaLibreM} x Pizza Libre Mujeres`, order.pizzaLibreM * appState.prices.pizzaLibreM);
         if (order.pizzaLibreG > 0) bodyHtml += line(`${order.pizzaLibreG} x Pizza Libre General`, order.pizzaLibreG * appState.prices.pizzaLibreG);
-        if (order.menores     > 0) bodyHtml += line(`${order.menores} x Menor`,    order.menores    * (order.menorPrice||0));
-        if (order.menu        > 0) bodyHtml += line(`${order.menu} x Menú`,        order.menu       * getMenuPrice());
-        if (order.empanadas   > 0) bodyHtml += line(`${order.empanadas} x Empanada`, order.empanadas * appState.prices.empanada);
-        if (order.postres     > 0) bodyHtml += line(`${order.postres} x Postre`,   order.postres    * appState.prices.precioPostre);
+        if (order.menores > 0) bodyHtml += line(`${order.menores} x Menor`, order.menores * (order.menorPrice || 0));
+        if (order.menu > 0) bodyHtml += line(`${order.menu} x Menú`, order.menu * getMenuPrice());
+        if (order.empanadas > 0) bodyHtml += line(`${order.empanadas} x Empanada`, order.empanadas * appState.prices.empanada);
+        if (order.postres > 0) bodyHtml += line(`${order.postres} x Postre`, order.postres * appState.prices.precioPostre);
 
         if (order.pizzasPersonalizadas && order.pizzasPersonalizadas.length > 0) {
             order.pizzasPersonalizadas.forEach(pizza => {
@@ -1597,8 +1597,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── INICIALIZACIÓN Y SINCRONIZACIÓN EN TIEMPO REAL ────────────────────────
     await loadState();
-    modeSwitcher.value        = appState.currentMode;
-    kitchenNumberInput.value  = appState.numeroCocina;
+    modeSwitcher.value = appState.currentMode;
+    kitchenNumberInput.value = appState.numeroCocina;
     updateUIMode(appState.currentMode);
     pizzaSizeSelect.dispatchEvent(new Event('change'));
     renderAll();
