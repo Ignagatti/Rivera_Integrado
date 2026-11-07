@@ -17,23 +17,30 @@ let currentUser = null;
 let currentRole = null; // 'waiter' | 'admin'
 let currentTable = null;
 let currentCategoryId = null;
+let isMobileDrawerOpen = false;
 
 // Modales y selectores de Pizza
 let currentPizzaConfigType = '1_flavor'; // '1_flavor' | '2_flavors' | '3_flavors' | 'media'
 let pizzaModalSize = 'entera'; // 'entera' | 'media'
 let pizzaModalFlavorsCount = 1; // 1 | 2 | 3
-let selectedPizzaFlavors = [];
 let pizzaModalQty = 1;
 
+// Estado Pizza Libre
+let pizzaLibreModalType = 'G';
+let pizzaLibreModalPrice = 16000;
+let pizzaLibreModalName = 'Pizza Libre General';
+let pizzaLibreCount = 1;
+let selectedLibreExclusions = [];
+let selectedNextRoundFlavors = [];
+
 // Estado de cobro
+let checkoutTableTarget = null;
 let selectedPaymentMethod = 'Efectivo';
-let selectedTipPercent = 0;
 let currentCheckoutSubtotal = 0;
 
-// Estado Admin
+// Estado Admin y Confirmación
 let currentAdminSubTab = 'menu';
-let currentAdminMenuCatId = 'pizzas';
-let editingMenuItemId = null;
+let confirmModalCallback = null;
 
 // Polling y WebSocket
 let syncPollingInterval = null;
@@ -90,6 +97,23 @@ function getCategoryIcon(catId) {
     return 'fa-wine-glass';
 }
 
+function getPizzaFlavorsCatalog() {
+    const pizzaCat = menuData.find(c => c.id === 'pizzas');
+    if (pizzaCat && Array.isArray(pizzaCat.items)) {
+        const flavors = pizzaCat.items.filter(i => i.isPizza && !i.isPizzaLibre);
+        if (flavors.length > 0) return flavors;
+    }
+    return (mozosPrices?.preciosPizzas || []).map((p, idx) => ({
+        id: `pizza_flavor_${idx}`,
+        name: p.name,
+        price: Number(p.precioEntera) || 0,
+        precioEntera: Number(p.precioEntera) || 0,
+        precioMedia: Number(p.precioMedia) || 0,
+        isPizza: true,
+        isPizzaLibre: false
+    }));
+}
+
 // ============================================================================
 // CONEXIÓN CON EL SERVIDOR Y SINCRONIZACIÓN EN TIEMPO REAL
 // ============================================================================
@@ -109,6 +133,7 @@ async function fetchServerState(silent = false) {
             : (data.menuData && typeof data.menuData === 'object')
                 ? Object.entries(data.menuData).map(([id, cat]) => ({ id, ...cat }))
                 : [];
+
         menuData = rawMenu.map(cat => ({
             id: cat.id,
             name: cat.title || cat.name || cat.id,
@@ -123,7 +148,7 @@ async function fetchServerState(silent = false) {
         const rawStaff = Array.isArray(data.staffList) ? data.staffList : [];
         staffList = rawStaff.map((s, idx) =>
             typeof s === 'string'
-                ? { id: `staff_${idx}`, name: s, role: 'waiter' }
+                ? { id: `staff_${idx}`, name: s, role: 'Mozo' }
                 : s
         );
 
@@ -133,37 +158,61 @@ async function fetchServerState(silent = false) {
         generalTipsPool = Number(data.generalTipsPool) || 0;
         nightReports = Array.isArray(data.nightReports) ? data.nightReports : [];
 
+        // Actualizar indicador de conexión con Neon DB
+        const pill = document.getElementById('db-connection-pill');
+        if (pill) {
+            pill.className = 'text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-semibold';
+            pill.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conectado';
+        }
+
+        updateHeaderCounters();
         refreshActiveViews();
     } catch (err) {
+        const pill = document.getElementById('db-connection-pill');
+        if (pill) {
+            pill.className = 'text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-semibold';
+            pill.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Reconectando...';
+        }
         if (!silent) {
             console.error('Error sincronizando estado:', err);
         }
     }
 }
 
+function updateHeaderCounters() {
+    const tipsEl = document.getElementById('header-tips-summary');
+    if (tipsEl) {
+        tipsEl.textContent = `Caja Propinas: $${generalTipsPool.toLocaleString('es-AR')}`;
+    }
+    const payCountEl = document.getElementById('header-payments-count');
+    if (payCountEl) {
+        payCountEl.textContent = String(paymentHistory.length);
+    }
+}
+
 function refreshActiveViews() {
-    const loginOverlay = document.getElementById('login-overlay');
-    if (loginOverlay && !loginOverlay.classList.contains('hidden')) {
+    const loginView = document.getElementById('login-view');
+    if (loginView && !loginView.classList.contains('hidden')) {
         renderStaffLoginList();
     }
 
     if (!currentUser) return;
 
-    if (currentRole === 'waiter') {
-        const tablesView = document.getElementById('waiter-tables-view');
-        const posView = document.getElementById('waiter-pos-view');
-        if (tablesView && !tablesView.classList.contains('hidden')) {
-            renderTablesGrid();
-        }
-        if (posView && !posView.classList.contains('hidden')) {
-            renderCategories();
-            renderMenuItems();
-            // No pisar el input de notas si el usuario está escribiendo
-            const noteInput = document.getElementById('order-note-input');
-            const isTypingNote = document.activeElement === noteInput;
-            renderOrder(isTypingNote);
-        }
-    } else if (currentRole === 'admin') {
+    const tablesView = document.getElementById('waiter-tables-view');
+    const orderView = document.getElementById('waiter-order-view');
+    const adminView = document.getElementById('admin-workspace');
+
+    if (tablesView && !tablesView.classList.contains('hidden')) {
+        renderTablesGrid();
+    }
+    if (orderView && !orderView.classList.contains('hidden')) {
+        renderCategories();
+        renderMenuItems();
+        const noteInput = document.getElementById('order-note');
+        const isTypingNote = document.activeElement === noteInput;
+        renderOrder(isTypingNote);
+    }
+    if (adminView && !adminView.classList.contains('hidden')) {
         renderAdminActiveSubTab();
     }
 }
@@ -197,50 +246,36 @@ function setupRealtimeSync() {
 // INICIO DE SESIÓN Y SELECCIÓN DE PERFIL (MOZO / ENCARGADO)
 // ============================================================================
 function renderStaffLoginList() {
-    const container = document.getElementById('login-staff-list');
+    const container = document.getElementById('staff-selection-list');
     if (!container) return;
 
-    const waiters = staffList.filter(s => s.role !== 'admin');
-    let html = '';
+    if (staffList.length === 0) {
+        container.innerHTML = `
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+                No hay mozos registrados. Ingresa al Panel Admin para agregarlos.
+            </div>
+        `;
+        return;
+    }
 
-    waiters.forEach(staff => {
+    container.innerHTML = staffList.map(staff => {
         const safeName = staff.name.replace(/'/g, "\\'");
-        html += `
+        return `
             <button onclick="loginAsWaiter('${safeName}')"
-                class="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/90 hover:bg-orange-500/15 border border-slate-700/80 hover:border-orange-500/50 transition-all group text-left">
-                <div class="flex items-center gap-3.5">
-                    <div class="w-11 h-11 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 font-bold text-base group-hover:scale-105 transition-transform">
-                        <i class="fa-solid fa-user-tie"></i>
+                class="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-blue-300 transition-all group text-left cursor-pointer active:scale-[0.99]">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 text-[#2563eb] flex items-center justify-center font-bold text-sm group-hover:bg-[#2563eb] group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-user-check"></i>
                     </div>
                     <div>
-                        <p class="font-bold text-white text-sm group-hover:text-orange-300 transition-colors">${staff.name}</p>
-                        <p class="text-[11px] text-slate-400">Mozo de Salón • Sincronizado</p>
+                        <p class="font-bold text-slate-900 text-sm group-hover:text-[#2563eb] transition-colors">${staff.name}</p>
+                        <p class="text-[11px] text-slate-500">Salón y Mesas • Sincronizado</p>
                     </div>
                 </div>
-                <i class="fa-solid fa-chevron-right text-slate-500 group-hover:text-orange-400 transition-colors"></i>
+                <i class="fa-solid fa-chevron-right text-slate-400 group-hover:text-[#2563eb] text-xs transition-colors"></i>
             </button>
         `;
-    });
-
-    html += `
-        <div class="pt-2 mt-2 border-t border-slate-800">
-            <button onclick="openAdminPasswordModal()"
-                class="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/90 hover:bg-amber-500/15 border border-slate-700/70 hover:border-amber-500/40 transition-all group text-left">
-                <div class="flex items-center gap-3.5">
-                    <div class="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-base">
-                        <i class="fa-solid fa-user-shield"></i>
-                    </div>
-                    <div>
-                        <p class="font-bold text-amber-300 text-sm">Encargado / Administración</p>
-                        <p class="text-[11px] text-slate-400">Precios Mozos, Reportes y Personal</p>
-                    </div>
-                </div>
-                <i class="fa-solid fa-lock text-slate-500 group-hover:text-amber-400 transition-colors"></i>
-            </button>
-        </div>
-    `;
-
-    container.innerHTML = html;
+    }).join('');
 }
 
 function loginAsWaiter(name) {
@@ -249,32 +284,37 @@ function loginAsWaiter(name) {
     localStorage.setItem('humboldt_user', name);
     localStorage.setItem('humboldt_role', 'waiter');
 
-    document.getElementById('login-overlay').classList.add('hidden');
+    document.getElementById('login-view').classList.add('hidden');
+    document.getElementById('main-header').classList.remove('hidden');
     document.getElementById('admin-workspace').classList.add('hidden');
-    document.getElementById('waiter-workspace').classList.remove('hidden');
+    document.getElementById('waiter-order-view').classList.add('hidden');
+    document.getElementById('waiter-tables-view').classList.remove('hidden');
 
     updateHeaderUserBadge();
-    backToTablesGrid();
+    renderTablesGrid();
 }
 
-function openAdminPasswordModal() {
-    const modal = document.getElementById('admin-password-modal');
-    const input = document.getElementById('admin-password-input');
-    const err = document.getElementById('admin-password-error');
-    if (err) err.classList.add('hidden');
+function openAdminDirect() {
+    const modal = document.getElementById('admin-auth-modal');
+    const input = document.getElementById('admin-auth-input');
+    const err = document.getElementById('admin-auth-error');
+    if (err) {
+        err.textContent = '';
+        err.classList.add('hidden');
+    }
     if (input) input.value = '';
     if (modal) modal.classList.remove('hidden');
     setTimeout(() => input && input.focus(), 80);
 }
 
-function closeAdminPasswordModal() {
-    const modal = document.getElementById('admin-password-modal');
+function closeAdminAuthModal() {
+    const modal = document.getElementById('admin-auth-modal');
     if (modal) modal.classList.add('hidden');
 }
 
-async function verifyAdminPassword() {
-    const input = document.getElementById('admin-password-input');
-    const err = document.getElementById('admin-password-error');
+async function submitAdminAuth() {
+    const input = document.getElementById('admin-auth-input');
+    const err = document.getElementById('admin-auth-error');
     const password = input ? input.value : '';
 
     try {
@@ -285,10 +325,13 @@ async function verifyAdminPassword() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            closeAdminPasswordModal();
+            closeAdminAuthModal();
             loginAsAdmin();
         } else {
-            if (err) err.classList.remove('hidden');
+            if (err) {
+                err.textContent = data.error || 'Contraseña incorrecta.';
+                err.classList.remove('hidden');
+            }
         }
     } catch (e) {
         showToast('Error al verificar contraseña', 'error');
@@ -301,46 +344,76 @@ function loginAsAdmin() {
     localStorage.setItem('humboldt_user', 'Encargado');
     localStorage.setItem('humboldt_role', 'admin');
 
-    document.getElementById('login-overlay').classList.add('hidden');
-    document.getElementById('waiter-workspace').classList.add('hidden');
-    document.getElementById('admin-workspace').classList.remove('hidden');
+    document.getElementById('login-view').classList.add('hidden');
+    document.getElementById('main-header').classList.remove('hidden');
+    switchToAdminWorkspace();
+}
 
+function switchToAdminWorkspace() {
+    document.getElementById('waiter-tables-view').classList.add('hidden');
+    document.getElementById('waiter-order-view').classList.add('hidden');
+    document.getElementById('admin-workspace').classList.remove('hidden');
     updateHeaderUserBadge();
-    switchAdminSubTab(currentAdminSubTab || 'menu');
+    switchAdminTab(currentAdminSubTab || 'menu');
+}
+
+function switchToWaiterTables() {
+    currentTable = null;
+    document.getElementById('admin-workspace').classList.add('hidden');
+    document.getElementById('waiter-order-view').classList.add('hidden');
+    document.getElementById('waiter-tables-view').classList.remove('hidden');
+    updateHeaderUserBadge();
+    renderTablesGrid();
 }
 
 function updateHeaderUserBadge() {
-    const nameEl = document.getElementById('active-user-name');
-    const roleEl = document.getElementById('active-user-role-badge');
-    const avatarEl = document.getElementById('user-avatar-icon');
+    const nameEl = document.getElementById('header-user-name');
+    const roleEl = document.getElementById('header-role-badge');
+    const adminNavBtn = document.getElementById('header-admin-nav-btn');
+    const salonNavBtn = document.getElementById('header-salon-nav-btn');
+    const salonBackAdminBtn = document.getElementById('salon-back-admin-btn');
+    const orderBackAdminBtn = document.getElementById('order-back-admin-btn');
 
-    if (nameEl) nameEl.textContent = currentUser || '-';
+    if (nameEl) nameEl.textContent = currentUser || 'Mozo';
     if (roleEl) {
-        if (currentRole === 'admin') {
-            roleEl.textContent = 'ADMIN';
-            roleEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30';
-        } else {
-            roleEl.textContent = 'MOZO';
-            roleEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30';
-        }
+        roleEl.textContent = currentRole === 'admin' ? 'Admin' : 'Mozo';
     }
-    if (avatarEl) {
-        avatarEl.innerHTML = currentRole === 'admin'
-            ? '<i class="fa-solid fa-user-shield text-xs"></i>'
-            : '<i class="fa-solid fa-user-tie text-xs"></i>';
+
+    const isAdmin = currentRole === 'admin';
+    const isAdminViewOpen = !document.getElementById('admin-workspace').classList.contains('hidden');
+
+    if (adminNavBtn) {
+        if (isAdmin && !isAdminViewOpen) adminNavBtn.classList.remove('hidden');
+        else adminNavBtn.classList.add('hidden');
     }
+    if (salonNavBtn) {
+        if (isAdmin && isAdminViewOpen) salonNavBtn.classList.remove('hidden');
+        else salonNavBtn.classList.add('hidden');
+    }
+    if (salonBackAdminBtn) {
+        if (isAdmin) salonBackAdminBtn.classList.remove('hidden');
+        else salonBackAdminBtn.classList.add('hidden');
+    }
+    if (orderBackAdminBtn) {
+        if (isAdmin) orderBackAdminBtn.classList.remove('hidden');
+        else orderBackAdminBtn.classList.add('hidden');
+    }
+
+    updateHeaderCounters();
 }
 
-function logoutRole() {
+function logoutStaff() {
     currentUser = null;
     currentRole = null;
     currentTable = null;
     localStorage.removeItem('humboldt_user');
     localStorage.removeItem('humboldt_role');
 
-    document.getElementById('waiter-workspace').classList.add('hidden');
+    document.getElementById('main-header').classList.add('hidden');
+    document.getElementById('waiter-tables-view').classList.add('hidden');
+    document.getElementById('waiter-order-view').classList.add('hidden');
     document.getElementById('admin-workspace').classList.add('hidden');
-    document.getElementById('login-overlay').classList.remove('hidden');
+    document.getElementById('login-view').classList.remove('hidden');
     renderStaffLoginList();
 }
 
@@ -348,11 +421,9 @@ function logoutRole() {
 // MAPA DE MESAS DEL SALÓN (SINCRONIZADO CON SISTEMA_MOZOS)
 // ============================================================================
 function renderTablesGrid() {
-    const grid = document.getElementById('tables-grid');
+    const grid = document.getElementById('tables-grid-cards');
     if (!grid) return;
 
-    let occupiedCount = 0;
-    let freeCount = 0;
     let html = '';
 
     tablesList.forEach(tableName => {
@@ -370,9 +441,6 @@ function renderTablesGrid() {
         const hasItems = items.length > 0;
         const isPaid = !!order.isPaid;
 
-        if (hasItems || isPaid) occupiedCount++;
-        else freeCount++;
-
         const total = items.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
         const unsentCount = items.reduce((acc, it) => {
             const diff = (Number(it.qty) || 0) - (Number(it.sentQty) || 0);
@@ -381,94 +449,88 @@ function renderTablesGrid() {
 
         const safeTable = tableName.replace(/'/g, "\\'");
 
-        let cardBorder = 'border-slate-800 hover:border-slate-600 bg-slate-900/90';
-        let statusBadge = `<span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Libre</span>`;
+        let cardClasses = 'bg-white border-slate-200 hover:border-blue-400';
+        let badgeHtml = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Libre</span>`;
 
         if (isPaid) {
-            cardBorder = 'border-emerald-500/70 bg-emerald-950/30 hover:border-emerald-400 shadow-lg shadow-emerald-950/30';
-            statusBadge = `<span class="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 shadow">✓ PAGADA</span>`;
+            cardClasses = 'bg-emerald-50/90 border-2 border-emerald-500 shadow-md shadow-emerald-500/10';
+            badgeHtml = `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-600 text-white">✓ PAGADA</span>`;
         } else if (unsentCount > 0) {
-            cardBorder = 'border-amber-500/60 bg-amber-950/20 hover:border-amber-400';
-            statusBadge = `<span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">Por Enviar (${unsentCount})</span>`;
+            cardClasses = 'bg-amber-50/70 border-2 border-amber-400';
+            badgeHtml = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">Sin enviar (${unsentCount})</span>`;
         } else if (hasItems) {
-            cardBorder = 'border-orange-500/50 bg-slate-900 hover:border-orange-400';
-            statusBadge = `<span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">Ocupada</span>`;
+            cardClasses = 'bg-blue-50/50 border-2 border-[#2563eb]';
+            badgeHtml = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#2563eb] text-white">Ocupada</span>`;
         }
 
         html += `
             <div onclick="selectTableAndOpenPOS('${safeTable}')"
-                class="rounded-2xl border ${cardBorder} p-4 transition-all cursor-pointer flex flex-col justify-between min-h-[155px] relative group">
+                class="rounded-2xl border ${cardClasses} p-3.5 sm:p-4 transition-all cursor-pointer flex flex-col justify-between min-h-[150px] shadow-sm hover:shadow-md">
                 <div>
-                    <div class="flex items-start justify-between gap-2 mb-2">
-                        <div class="flex items-center gap-2">
-                            <div class="w-9 h-9 rounded-xl ${isPaid ? 'bg-emerald-500 text-slate-950' : hasItems ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800 text-slate-400'} flex items-center justify-center font-black text-sm">
-                                ${tableName.replace(/[^0-9]/g, '') || 'M'}
-                            </div>
-                            <div>
-                                <h3 class="font-extrabold text-white text-base leading-tight">${tableName}</h3>
-                                <p class="text-[11px] text-slate-400 truncate max-w-[110px]">
-                                    <i class="fa-solid fa-user text-[9px] mr-1"></i>${hasItems || isPaid ? (order.waiter || 'Mozo') : 'Disponible'}
-                                </p>
-                            </div>
+                    <div class="flex items-start justify-between gap-1.5 mb-2">
+                        <div>
+                            <h3 class="font-extrabold text-slate-900 text-sm sm:text-base">${tableName}</h3>
+                            <p class="text-[11px] text-slate-500 truncate max-w-[110px]">
+                                <i class="fa-solid fa-user text-[9px] mr-1"></i>${hasItems || isPaid ? (order.waiter || 'Mozo') : 'Disponible'}
+                            </p>
                         </div>
-                        ${statusBadge}
+                        ${badgeHtml}
                     </div>
 
                     ${isPaid ? `
-                        <div class="mt-2 p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs">
-                            <div class="flex justify-between font-bold text-emerald-300">
+                        <div class="mt-2 p-2 rounded-xl bg-emerald-100/80 border border-emerald-300 text-xs">
+                            <div class="flex justify-between font-bold text-emerald-900">
                                 <span>Cobrado:</span>
                                 <span>$${(order.paidAmount || total).toLocaleString('es-AR')}</span>
                             </div>
                             ${order.tipAmount > 0 ? `
-                                <div class="flex justify-between text-[11px] text-emerald-400/90 mt-0.5">
+                                <div class="flex justify-between text-[11px] text-emerald-800 mt-0.5">
                                     <span>Propina:</span>
                                     <span>+$${Number(order.tipAmount).toLocaleString('es-AR')}</span>
                                 </div>
                             ` : ''}
                         </div>
                     ` : hasItems ? `
-                        <div class="mt-2 space-y-1">
-                            <p class="text-xs text-slate-300 font-medium line-clamp-2">
-                                ${items.slice(0, 3).map(i => `${i.qty}x ${i.name}`).join(', ')}${items.length > 3 ? '...' : ''}
-                            </p>
-                        </div>
+                        <p class="text-xs text-slate-600 font-medium line-clamp-2 mt-1">
+                            ${items.slice(0, 3).map(i => `${i.qty}x ${i.name}`).join(', ')}${items.length > 3 ? '...' : ''}
+                        </p>
                     ` : `
-                        <p class="text-xs text-slate-500 mt-4 italic">Toque para abrir mesa</p>
+                        <p class="text-xs text-slate-400 mt-3 italic">Toca para cargar pedido</p>
                     `}
                 </div>
 
-                <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between">
+                <div class="mt-3 pt-2.5 border-t border-slate-200/80 flex items-center justify-between gap-1">
                     <div>
-                        <span class="text-[10px] text-slate-400 uppercase block">Total Mesa</span>
-                        <span class="text-base font-black ${isPaid ? 'text-emerald-400' : hasItems ? 'text-white' : 'text-slate-500'}">
+                        <span class="text-[10px] text-slate-400 uppercase font-semibold block">Total</span>
+                        <span class="text-sm sm:text-base font-extrabold ${isPaid ? 'text-emerald-700' : hasItems ? 'text-slate-900' : 'text-slate-400'}">
                             $${total.toLocaleString('es-AR')}
                         </span>
                     </div>
 
                     ${isPaid ? `
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex items-center gap-1">
                             <button onclick="freePaidTable('${safeTable}', event)"
-                                title="Liberar mesa para nuevos clientes (guarda la venta en el cierre)"
-                                class="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[11px] shadow transition-all">
+                                title="Liberar mesa para nuevos clientes (conserva la venta en el cierre)"
+                                class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm transition-all">
                                 <i class="fa-solid fa-broom mr-1"></i>Liberar
                             </button>
                             <button onclick="unpayTable('${safeTable}', event)"
                                 title="Desmarcar pago"
-                                class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700">
+                                class="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-600 text-xs border border-slate-300">
                                 <i class="fa-solid fa-rotate-left"></i>
                             </button>
                         </div>
-                    ` : !hasItems ? `
-                        <button onclick="deleteTable('${safeTable}', event)"
-                            title="Eliminar mesa vacía"
-                            class="opacity-70 hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all text-xs">
-                            <i class="fa-solid fa-trash-can"></i>
+                    ` : hasItems ? `
+                        <button onclick="openPaymentByTable('${safeTable}', event)"
+                            class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm transition-all">
+                            <i class="fa-solid fa-cash-register mr-1"></i>Cobrar
                         </button>
                     ` : `
-                        <span class="text-xs font-bold text-orange-400 group-hover:translate-x-0.5 transition-transform">
-                            Abrir <i class="fa-solid fa-arrow-right ml-0.5"></i>
-                        </span>
+                        <button onclick="deleteTable('${safeTable}', event)"
+                            title="Eliminar mesa vacía"
+                            class="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all text-xs">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
                     `}
                 </div>
             </div>
@@ -476,22 +538,34 @@ function renderTablesGrid() {
     });
 
     grid.innerHTML = html;
-
-    const occBadge = document.getElementById('tables-occupied-count');
-    const freeBadge = document.getElementById('tables-free-count');
-    if (occBadge) occBadge.textContent = `${occupiedCount} Ocupadas`;
-    if (freeBadge) freeBadge.textContent = `${freeCount} Libres`;
 }
 
-async function promptAddNewTable() {
+function openAddTableModal() {
+    const modal = document.getElementById('add-table-modal');
+    const input = document.getElementById('new-table-name-input');
+    const nextNum = tablesList.length + 1;
+    if (input) input.value = `Mesa ${nextNum}`;
+    if (modal) modal.classList.remove('hidden');
+    setTimeout(() => input && input.focus(), 80);
+}
+
+function closeAddTableModal() {
+    const modal = document.getElementById('add-table-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitAddNewTable() {
+    const input = document.getElementById('new-table-name-input');
+    const name = input ? input.value.trim() : '';
     try {
         const res = await fetch('/api/tables', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
+            body: JSON.stringify({ name })
         });
         const data = await res.json();
         if (res.ok && data.success) {
+            closeAddTableModal();
             await fetchServerState(true);
             showToast(`${data.tableName || 'Nueva mesa'} creada y sincronizada con Sistema Mozos`, 'success');
         } else {
@@ -504,19 +578,24 @@ async function promptAddNewTable() {
 
 async function deleteTable(tableName, event) {
     if (event) event.stopPropagation();
-    if (!confirm(`¿Eliminar ${tableName} del plano de mesas?`)) return;
-    try {
-        const res = await fetch(`/api/tables/${encodeURIComponent(tableName)}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (res.ok && data.success) {
-            await fetchServerState(true);
-            showToast(`${tableName} eliminada`, 'info');
-        } else {
-            showToast(data.error || 'No se puede eliminar una mesa con pedido activo', 'error');
+    openConfirmModal(
+        'Eliminar Mesa',
+        `¿Deseas eliminar ${tableName} del plano del salón?`,
+        async () => {
+            try {
+                const res = await fetch(`/api/tables/${encodeURIComponent(tableName)}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await fetchServerState(true);
+                    showToast(`${tableName} eliminada`, 'info');
+                } else {
+                    showToast(data.error || 'No se puede eliminar una mesa con pedido activo', 'error');
+                }
+            } catch (e) {
+                showToast('Error al eliminar mesa', 'error');
+            }
         }
-    } catch (e) {
-        showToast('Error al eliminar mesa', 'error');
-    }
+    );
 }
 
 async function freePaidTable(tableName, event) {
@@ -577,46 +656,50 @@ function selectTableAndOpenPOS(tableName) {
     }
 
     document.getElementById('waiter-tables-view').classList.add('hidden');
-    document.getElementById('waiter-pos-view').classList.remove('hidden');
+    document.getElementById('admin-workspace').classList.add('hidden');
+    document.getElementById('waiter-order-view').classList.remove('hidden');
 
-    const titleBadge = document.getElementById('pos-active-table-badge');
-    const waiterBadge = document.getElementById('pos-table-waiter-label');
-    const orderHeader = document.getElementById('current-table-display');
+    const tableIndicator = document.getElementById('active-table-indicator');
+    const orderHeader = document.getElementById('current-order-title');
 
-    if (titleBadge) titleBadge.textContent = tableName;
-    if (waiterBadge) waiterBadge.textContent = `Atiende: ${ordersByTable[currentTable].waiter || currentUser}`;
-    if (orderHeader) orderHeader.textContent = tableName;
+    if (tableIndicator) tableIndicator.textContent = tableName;
+    if (orderHeader) orderHeader.textContent = `Pedido ${tableName}`;
 
     if (!currentCategoryId && menuData.length > 0) {
         currentCategoryId = menuData[0].id;
     }
 
+    updateHeaderUserBadge();
     renderCategories();
     renderMenuItems();
     renderOrder();
 }
 
-function backToTablesGrid() {
+function backToTablesView() {
     currentTable = null;
-    document.getElementById('waiter-pos-view').classList.add('hidden');
+    isMobileDrawerOpen = false;
+    const content = document.getElementById('order-drawer-content');
+    if (content) content.classList.add('hidden');
+
+    document.getElementById('waiter-order-view').classList.add('hidden');
     document.getElementById('waiter-tables-view').classList.remove('hidden');
-    closeMobileCartDrawer();
     renderTablesGrid();
 }
 
-function openMobileCartDrawer() {
-    const panel = document.getElementById('pos-order-panel');
-    if (panel) {
-        panel.classList.remove('translate-y-full');
-        panel.classList.add('translate-y-0');
-    }
-}
+function toggleOrderDrawer() {
+    const content = document.getElementById('order-drawer-content');
+    const chevron = document.getElementById('drawer-chevron');
+    if (!content) return;
 
-function closeMobileCartDrawer() {
-    const panel = document.getElementById('pos-order-panel');
-    if (panel) {
-        panel.classList.add('translate-y-full');
-        panel.classList.remove('translate-y-0');
+    isMobileDrawerOpen = !isMobileDrawerOpen;
+    if (isMobileDrawerOpen) {
+        content.classList.remove('hidden');
+        content.classList.add('flex');
+        if (chevron) chevron.classList.add('rotate-180');
+    } else {
+        content.classList.add('hidden');
+        content.classList.remove('flex');
+        if (chevron) chevron.classList.remove('rotate-180');
     }
 }
 
@@ -624,17 +707,17 @@ function closeMobileCartDrawer() {
 // CATEGORÍAS Y PRODUCTOS DEL MENÚ (PRECIOS DE SISTEMA_MOZOS)
 // ============================================================================
 function renderCategories() {
-    const container = document.getElementById('categories-container');
+    const container = document.getElementById('category-tabs');
     if (!container) return;
 
     container.innerHTML = menuData.map(cat => {
         const isActive = cat.id === currentCategoryId;
         return `
             <button onclick="selectCategory('${cat.id}')"
-                class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all shrink-0 ${
+                class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                     isActive
-                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
-                        : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 border border-slate-700/70'
+                        ? 'bg-[#2563eb] text-white shadow-md shadow-blue-500/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }">
                 <i class="fa-solid ${cat.icon || getCategoryIcon(cat.id)}"></i>
                 <span>${cat.name}</span>
@@ -654,18 +737,37 @@ function setPizzaConfigMode(mode) {
     renderMenuItems();
 }
 
+function filterMenuItems() {
+    const input = document.getElementById('menu-search-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn && input) {
+        if (input.value.trim().length > 0) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
+    renderMenuItems();
+}
+
+function clearSearchInput() {
+    const input = document.getElementById('menu-search-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.classList.add('hidden');
+    renderMenuItems();
+}
+
 function renderMenuItems() {
-    const container = document.getElementById('menu-container');
+    const container = document.getElementById('menu-grid');
     const modesBar = document.getElementById('pizza-modes-bar');
+    const libreBanner = document.getElementById('pizza-libre-active-banner');
     if (!container) return;
 
     const category = menuData.find(c => c.id === currentCategoryId) || menuData[0];
     if (!category) {
-        container.innerHTML = `<p class="text-slate-400 text-sm col-span-full text-center py-8">Cargando carta de precios...</p>`;
+        container.innerHTML = `<p class="text-slate-400 text-xs col-span-full text-center py-8">Cargando carta de precios...</p>`;
         return;
     }
 
-    const searchInput = document.getElementById('menu-search');
+    const searchInput = document.getElementById('menu-search-input');
     const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
     // Mostrar barra de modo de pizza cuando estamos en la categoría Pizzas
@@ -673,34 +775,34 @@ function renderMenuItems() {
         if (category.id === 'pizzas') {
             modesBar.classList.remove('hidden');
             modesBar.innerHTML = `
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-xs font-bold text-orange-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fa-solid fa-sliders"></i> Modo rápido de Pizza:
+                <div class="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-pizza-slice text-[#2563eb]"></i> Modo de Pizza:
                     </span>
                     <div class="flex flex-wrap gap-1.5">
                         <button onclick="setPizzaConfigMode('1_flavor')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                 currentPizzaConfigType === '1_flavor'
-                                    ? 'bg-orange-500 text-white shadow'
-                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                    ? 'bg-[#2563eb] text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }">1 Gusto (Entera)</button>
                         <button onclick="setPizzaConfigMode('media')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                 currentPizzaConfigType === 'media'
-                                    ? 'bg-orange-500 text-white shadow'
-                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                    ? 'bg-[#2563eb] text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }">Media Pizza</button>
                         <button onclick="setPizzaConfigMode('2_flavors')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                 currentPizzaConfigType === '2_flavors'
-                                    ? 'bg-orange-500 text-white shadow'
-                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                    ? 'bg-[#2563eb] text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }">2 Gustos (Mitad/Mitad)</button>
                         <button onclick="setPizzaConfigMode('3_flavors')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                 currentPizzaConfigType === '3_flavors'
-                                    ? 'bg-orange-500 text-white shadow'
-                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                    ? 'bg-[#2563eb] text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }">3 Gustos</button>
                     </div>
                 </div>
@@ -710,12 +812,43 @@ function renderMenuItems() {
         }
     }
 
-    const items = (category.items || []).filter(it =>
-        !query || it.name.toLowerCase().includes(query)
-    );
+    // Mostrar banner de Rondas de Pizza Libre si la mesa tiene Pizza Libre activa
+    if (libreBanner && currentTable && ordersByTable[currentTable]) {
+        const tableOrder = ordersByTable[currentTable];
+        const hasLibre = (tableOrder.items || []).some(it => it.isPizzaLibre);
+        if (hasLibre && !tableOrder.isPaid) {
+            libreBanner.classList.remove('hidden');
+            libreBanner.innerHTML = `
+                <div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 flex items-center justify-between gap-2">
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase text-[#2563eb] block">Pizza Libre Activa • Ronda #${tableOrder.libreRounds || 1}</span>
+                        <p class="text-xs text-slate-600">¿Los clientes quieren otra tanda de pizza libre?</p>
+                    </div>
+                    <button onclick="openNextRoundModal()"
+                        class="bg-[#2563eb] hover:bg-blue-600 text-white font-bold px-3 py-2 rounded-xl text-xs shadow-sm shrink-0 cursor-pointer">
+                        <i class="fa-solid fa-arrows-rotate mr-1"></i>Pedir Ronda ($0)
+                    </button>
+                </div>
+            `;
+        } else {
+            libreBanner.classList.add('hidden');
+        }
+    }
+
+    // Si hay búsqueda, buscar en todas las categorías
+    let items = [];
+    if (query) {
+        menuData.forEach(c => {
+            (c.items || []).forEach(it => {
+                if (it.name.toLowerCase().includes(query)) items.push(it);
+            });
+        });
+    } else {
+        items = category.items || [];
+    }
 
     if (items.length === 0) {
-        container.innerHTML = `<p class="text-slate-500 text-sm col-span-full text-center py-8">No se encontraron productos.</p>`;
+        container.innerHTML = `<p class="text-slate-400 text-xs col-span-full text-center py-8">No se encontraron productos.</p>`;
         return;
     }
 
@@ -730,25 +863,21 @@ function renderMenuItems() {
 
         return `
             <div onclick="onMenuItemClicked('${safeId}')"
-                class="rounded-2xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between min-h-[110px] select-none active:scale-[0.98] ${
+                class="rounded-2xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between min-h-[104px] select-none active:scale-[0.98] shadow-sm ${
                     isLibre
-                        ? 'bg-gradient-to-br from-orange-500/20 to-amber-500/10 border-orange-500/50 hover:border-orange-400'
-                        : 'bg-slate-800/90 hover:bg-slate-800 border-slate-700/80 hover:border-orange-500/50'
+                        ? 'bg-blue-50/80 border-2 border-[#2563eb] hover:bg-blue-50'
+                        : 'bg-white hover:border-blue-300 border-slate-200'
                 }">
                 <div>
                     <div class="flex items-start justify-between gap-2">
-                        <h4 class="font-bold text-white text-sm leading-snug">${item.name}</h4>
-                        ${isLibre ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-orange-500 text-white shrink-0">LIBRE</span>` : ''}
+                        <h4 class="font-bold text-slate-900 text-xs sm:text-sm leading-snug">${item.name}</h4>
+                        ${isLibre ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#2563eb] text-white shrink-0">LIBRE</span>` : ''}
                     </div>
-                    ${isPizza && item.precioMedia ? `
-                        <p class="text-[11px] text-slate-400 mt-1">
-                            Entera: $${Number(item.price).toLocaleString('es-AR')} • Media: $${Number(item.precioMedia).toLocaleString('es-AR')}
-                        </p>
-                    ` : ''}
+                    ${item.desc ? `<p class="text-[11px] text-slate-500 mt-1 line-clamp-1">${item.desc}</p>` : ''}
                 </div>
-                <div class="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between">
-                    <span class="text-sm font-black text-orange-400">$${displayPrice.toLocaleString('es-AR')}</span>
-                    <div class="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">
+                <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-sm font-extrabold text-[#2563eb]">$${displayPrice.toLocaleString('es-AR')}</span>
+                    <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center text-xs font-bold border border-blue-200">
                         <i class="fa-solid fa-plus"></i>
                     </div>
                 </div>
@@ -757,13 +886,9 @@ function renderMenuItems() {
     }).join('');
 }
 
-function filterMenu() {
-    renderMenuItems();
-}
-
 function onMenuItemClicked(itemId) {
     if (!currentTable) {
-        showToast('Seleccione una mesa primero', 'error');
+        showToast('Selecciona una mesa primero', 'error');
         return;
     }
 
@@ -778,14 +903,7 @@ function onMenuItemClicked(itemId) {
     if (!foundItem) return;
 
     if (foundItem.isPizzaLibre) {
-        addDirectItemToOrder({
-            id: foundItem.id,
-            name: foundItem.name,
-            price: Number(foundItem.price) || 0,
-            isPizza: true,
-            isPizzaLibre: true,
-            libreType: foundItem.libreType || 'G'
-        });
+        openPizzaLibreModal(foundItem);
         return;
     }
 
@@ -801,36 +919,16 @@ function onMenuItemClicked(itemId) {
         isPizza: false,
         isPizzaLibre: false,
         isEmpanada: !!foundItem.isEmpanada || foundItem.id === 'item_empanada',
-         isPostre: !!foundItem.isPostre || foundItem.id === 'item_postre',
+        isPostre: !!foundItem.isPostre || foundItem.id === 'item_postre',
         isBeverage: !!foundItem.isBeverage
     });
 }
 
 function onPizzaItemClicked(pizzaItem) {
     if (currentPizzaConfigType === '1_flavor') {
-        const price = calculateMozosPizzaPrice('entera', [pizzaItem.name]) || Number(pizzaItem.price) || 0;
-        addDirectItemToOrder({
-            id: `pizza_entera_${pizzaItem.name}`,
-            name: `Pizza Entera (${pizzaItem.name})`,
-            price,
-            isPizza: true,
-            isPizzaLibre: false,
-            pizzaSize: 'entera',
-            pizzaConfigType: '1_flavor',
-            toppings: [pizzaItem.name]
-        });
+        openPizzaBuilderModal('entera', 1, pizzaItem.name);
     } else if (currentPizzaConfigType === 'media') {
-        const price = calculateMozosPizzaPrice('media', [pizzaItem.name]) || Number(pizzaItem.precioMedia) || Math.round((Number(pizzaItem.price) || 0) / 2);
-        addDirectItemToOrder({
-            id: `pizza_media_${pizzaItem.name}`,
-            name: `Media Pizza (${pizzaItem.name})`,
-            price,
-            isPizza: true,
-            isPizzaLibre: false,
-            pizzaSize: 'media',
-            pizzaConfigType: 'media',
-            toppings: [pizzaItem.name]
-        });
+        openPizzaBuilderModal('media', 1, pizzaItem.name);
     } else if (currentPizzaConfigType === '2_flavors') {
         openPizzaBuilderModal('entera', 2, pizzaItem.name);
     } else if (currentPizzaConfigType === '3_flavors') {
@@ -843,24 +941,45 @@ function onPizzaItemClicked(pizzaItem) {
 // ============================================================================
 // MODAL CONFIGURADOR DE PIZZAS (ENTERA / MEDIA, 1 / 2 / 3 GUSTOS)
 // ============================================================================
-function openPizzaBuilderModal(initialSize = 'entera', initialCount = 2, preselectedFlavor = null) {
+function openPizzaBuilderModal(initialSize = 'entera', initialCount = 1, preselectedFlavor = null) {
     pizzaModalSize = initialSize === 'media' ? 'media' : 'entera';
-    pizzaModalFlavorsCount = initialCount || 2;
+    pizzaModalFlavorsCount = initialCount || 1;
     if (pizzaModalSize === 'media' && pizzaModalFlavorsCount > 2) {
         pizzaModalFlavorsCount = 2;
     }
-    selectedPizzaFlavors = preselectedFlavor ? [preselectedFlavor] : [];
     pizzaModalQty = 1;
 
-    const obsInput = document.getElementById('pizza-builder-obs');
-    if (obsInput) obsInput.value = '';
+    const subtitle = document.getElementById('pizza-modal-subtitle');
+    if (subtitle) subtitle.textContent = currentTable || 'Mesa';
+
+    const qtyIn = document.getElementById('pizza-qty-input');
+    if (qtyIn) qtyIn.value = '1';
+
+    const noteIn = document.getElementById('pizza-note-input');
+    if (noteIn) noteIn.value = '';
+
+    const customIn = document.getElementById('pizza-custom-flavor-input');
+    if (customIn) customIn.value = '';
+
+    const flavors = getPizzaFlavorsCatalog();
+    [1, 2, 3].forEach(idx => {
+        const sel = document.getElementById(`select-pizza-flavor-${idx}`);
+        if (!sel) return;
+        sel.innerHTML = flavors.map(f =>
+            `<option value="${f.name}">${f.name} ($${Number(f.price).toLocaleString('es-AR')})</option>`
+        ).join('');
+        if (idx === 1 && preselectedFlavor) {
+            sel.value = preselectedFlavor;
+        } else if (flavors[idx - 1]) {
+            sel.value = flavors[idx - 1].name;
+        }
+    });
 
     const modal = document.getElementById('pizza-builder-modal');
     if (modal) modal.classList.remove('hidden');
 
     syncPizzaModalButtonsUI();
-    renderPizzaBuilderFlavorButtons();
-    updatePizzaBuilderPreview();
+    onPizzaFlavorSelectChange();
 }
 
 function closePizzaBuilderModal() {
@@ -873,141 +992,114 @@ function setPizzaModalSize(size) {
     if (pizzaModalSize === 'media' && pizzaModalFlavorsCount > 2) {
         pizzaModalFlavorsCount = 2;
     }
-    if (selectedPizzaFlavors.length > pizzaModalFlavorsCount) {
-        selectedPizzaFlavors = selectedPizzaFlavors.slice(0, pizzaModalFlavorsCount);
-    }
     syncPizzaModalButtonsUI();
-    renderPizzaBuilderFlavorButtons();
-    updatePizzaBuilderPreview();
+    onPizzaFlavorSelectChange();
 }
 
 function setPizzaFlavorsCount(count) {
     if (pizzaModalSize === 'media' && count > 2) {
-        showToast('En Media Pizza puedes elegir hasta 2 gustos', 'info');
+        showToast('En Media Pizza se pueden combinar hasta 2 gustos', 'info');
         count = 2;
     }
     pizzaModalFlavorsCount = count;
-    if (selectedPizzaFlavors.length > count) {
-        selectedPizzaFlavors = selectedPizzaFlavors.slice(0, count);
-    }
     syncPizzaModalButtonsUI();
-    renderPizzaBuilderFlavorButtons();
-    updatePizzaBuilderPreview();
+    onPizzaFlavorSelectChange();
 }
 
 function syncPizzaModalButtonsUI() {
-    const sizeEnteraBtn = document.getElementById('pizza-size-entera-btn');
-    const sizeMediaBtn = document.getElementById('pizza-size-media-btn');
+    const btnEntera = document.getElementById('btn-pizza-size-entera');
+    const btnMedia = document.getElementById('btn-pizza-size-media');
 
-    if (sizeEnteraBtn && sizeMediaBtn) {
-        sizeEnteraBtn.className = pizzaModalSize === 'entera'
-            ? 'py-2 rounded-xl font-bold text-xs border border-orange-500 bg-orange-500/20 text-orange-300 transition-all'
-            : 'py-2 rounded-xl font-bold text-xs border border-slate-700 bg-slate-800 text-slate-400 transition-all';
-        sizeMediaBtn.className = pizzaModalSize === 'media'
-            ? 'py-2 rounded-xl font-bold text-xs border border-orange-500 bg-orange-500/20 text-orange-300 transition-all'
-            : 'py-2 rounded-xl font-bold text-xs border border-slate-700 bg-slate-800 text-slate-400 transition-all';
+    if (btnEntera && btnMedia) {
+        btnEntera.className = pizzaModalSize === 'entera'
+            ? 'py-2 px-3 rounded-xl border-2 border-[#2563eb] bg-blue-50/80 text-[#2563eb] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm'
+            : 'py-2 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all';
+        btnMedia.className = pizzaModalSize === 'media'
+            ? 'py-2 px-3 rounded-xl border-2 border-[#2563eb] bg-blue-50/80 text-[#2563eb] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm'
+            : 'py-2 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all';
     }
 
     [1, 2, 3].forEach(n => {
-        const btn = document.getElementById(`pizza-flavor-btn-${n}`);
+        const btn = document.getElementById(`btn-pizza-gustos-${n}`);
         if (!btn) return;
         if (n === pizzaModalFlavorsCount) {
-            btn.className = 'py-2.5 rounded-xl font-bold text-xs border border-orange-500 bg-orange-500/20 text-orange-300 transition-all';
+            btn.className = 'py-2.5 px-2 rounded-2xl border-2 border-[#2563eb] bg-blue-50/80 text-[#2563eb] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all shadow-sm';
         } else {
-            btn.className = 'py-2.5 rounded-xl font-bold text-xs border border-slate-700 bg-slate-800 text-slate-400 transition-all';
+            btn.className = 'py-2.5 px-2 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all';
         }
     });
 
-    const subtitle = document.getElementById('pizza-modal-subtitle');
-    if (subtitle) {
-        subtitle.textContent = `${pizzaModalSize === 'media' ? 'Media Pizza' : 'Pizza Entera'} • Seleccione ${pizzaModalFlavorsCount} gusto(s)`;
+    const c2 = document.getElementById('container-gusto-2');
+    const c3 = document.getElementById('container-gusto-3');
+    if (c2) {
+        if (pizzaModalFlavorsCount >= 2) c2.classList.remove('hidden');
+        else c2.classList.add('hidden');
+    }
+    if (c3) {
+        if (pizzaModalFlavorsCount >= 3) c3.classList.remove('hidden');
+        else c3.classList.add('hidden');
     }
 }
 
-function renderPizzaBuilderFlavorButtons() {
-    const grid = document.getElementById('pizza-flavors-grid');
-    if (!grid) return;
+function getSelectedModalToppings() {
+    const s1 = document.getElementById('select-pizza-flavor-1')?.value;
+    const s2 = document.getElementById('select-pizza-flavor-2')?.value;
+    const s3 = document.getElementById('select-pizza-flavor-3')?.value;
 
-    const pizzaCat = menuData.find(c => c.id === 'pizzas');
-    const flavors = (pizzaCat ? pizzaCat.items : []).filter(i => i.isPizza && !i.isPizzaLibre);
-
-    grid.innerHTML = flavors.map(f => {
-        const isSelected = selectedPizzaFlavors.includes(f.name);
-        const safeName = f.name.replace(/'/g, "\\'");
-        return `
-            <button onclick="togglePizzaFlavorSelection('${safeName}')"
-                class="p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
-                    isSelected
-                        ? 'bg-orange-500/25 border-orange-500 text-white font-bold shadow'
-                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:border-slate-600'
-                }">
-                <span class="text-xs truncate pr-1">${f.name}</span>
-                ${isSelected ? '<i class="fa-solid fa-circle-check text-orange-400 text-xs shrink-0"></i>' : ''}
-            </button>
-        `;
-    }).join('');
+    const toppings = [];
+    if (s1) toppings.push(s1);
+    if (pizzaModalFlavorsCount >= 2 && s2) toppings.push(s2);
+    if (pizzaModalFlavorsCount >= 3 && s3) toppings.push(s3);
+    return toppings;
 }
 
-function togglePizzaFlavorSelection(flavorName) {
-    const idx = selectedPizzaFlavors.indexOf(flavorName);
-    if (idx !== -1) {
-        selectedPizzaFlavors.splice(idx, 1);
-    } else {
-        if (selectedPizzaFlavors.length >= pizzaModalFlavorsCount) {
-            if (pizzaModalFlavorsCount === 1) {
-                selectedPizzaFlavors = [flavorName];
-            } else {
-                showToast(`Ya seleccionaste los ${pizzaModalFlavorsCount} gustos`, 'info');
-                return;
-            }
-        } else {
-            selectedPizzaFlavors.push(flavorName);
-        }
-    }
-    renderPizzaBuilderFlavorButtons();
-    updatePizzaBuilderPreview();
-}
-
-function changePizzaBuilderQty(delta) {
-    pizzaModalQty = Math.max(1, pizzaModalQty + delta);
-    const qtyEl = document.getElementById('pizza-builder-qty');
-    if (qtyEl) qtyEl.textContent = String(pizzaModalQty);
-    updatePizzaBuilderPreview();
-}
-
-function updatePizzaBuilderPreview() {
-    const summaryEl = document.getElementById('pizza-selected-flavors-summary');
-    const priceEl = document.getElementById('pizza-builder-price-preview');
-
-    if (summaryEl) {
-        summaryEl.textContent = selectedPizzaFlavors.length > 0
-            ? `${pizzaModalSize === 'media' ? 'Media' : 'Entera'}: ${selectedPizzaFlavors.join(' + ')}`
-            : 'Ningún gusto seleccionado';
-    }
-
-    const unitPrice = calculateMozosPizzaPrice(pizzaModalSize, selectedPizzaFlavors);
+function onPizzaFlavorSelectChange() {
+    const toppings = getSelectedModalToppings();
+    const unitPrice = calculateMozosPizzaPrice(pizzaModalSize, toppings);
     const totalPrice = unitPrice * pizzaModalQty;
-    if (priceEl) {
-        priceEl.textContent = `$${totalPrice.toLocaleString('es-AR')}`;
+
+    const sizeLabel = pizzaModalSize === 'media' ? 'Media Pizza' : 'Pizza Entera';
+    const previewName = document.getElementById('pizza-preview-name');
+    const previewCalc = document.getElementById('pizza-preview-calculation');
+    const previewTotal = document.getElementById('pizza-preview-total');
+
+    if (previewName) {
+        previewName.textContent = `${sizeLabel} (${toppings.join(' / ')})`;
     }
+    if (previewCalc) {
+        previewCalc.textContent = `$${unitPrice.toLocaleString('es-AR')} c/u × ${pizzaModalQty}`;
+    }
+    if (previewTotal) {
+        previewTotal.textContent = `$${totalPrice.toLocaleString('es-AR')}`;
+    }
+}
+
+function changePizzaModalQty(delta) {
+    pizzaModalQty = Math.max(1, pizzaModalQty + delta);
+    const qtyIn = document.getElementById('pizza-qty-input');
+    if (qtyIn) qtyIn.value = String(pizzaModalQty);
+    onPizzaFlavorSelectChange();
 }
 
 function confirmAddPizzaToOrder() {
-    if (selectedPizzaFlavors.length !== pizzaModalFlavorsCount) {
-        showToast(`Debes seleccionar ${pizzaModalFlavorsCount} gusto(s)`, 'error');
+    const toppings = getSelectedModalToppings();
+    if (toppings.length === 0) {
+        showToast('Selecciona al menos un gusto de pizza', 'error');
         return;
     }
 
-    const unitPrice = calculateMozosPizzaPrice(pizzaModalSize, selectedPizzaFlavors);
-    const obsInput = document.getElementById('pizza-builder-obs');
-    const note = obsInput ? obsInput.value.trim() : '';
+    const unitPrice = calculateMozosPizzaPrice(pizzaModalSize, toppings);
+    const noteIn = document.getElementById('pizza-note-input');
+    const customIn = document.getElementById('pizza-custom-flavor-input');
+    const extraCustom = customIn ? customIn.value.trim() : '';
+    const rawNote = noteIn ? noteIn.value.trim() : '';
+    const note = [extraCustom, rawNote].filter(Boolean).join(' - ');
 
     const sizeLabel = pizzaModalSize === 'media' ? 'Media Pizza' : 'Pizza Entera';
-    const flavorsLabel = selectedPizzaFlavors.join(' / ');
-    const itemName = `${sizeLabel} (${flavorsLabel})`;
+    const itemName = `${sizeLabel} (${toppings.join(' / ')})`;
 
     addDirectItemToOrder({
-        id: `pizza_${pizzaModalSize}_${selectedPizzaFlavors.join('_')}_${ note || 'std' }`,
+        id: `pizza_${pizzaModalSize}_${toppings.join('_')}`,
         name: itemName,
         price: unitPrice,
         qty: pizzaModalQty,
@@ -1016,10 +1108,182 @@ function confirmAddPizzaToOrder() {
         isPizzaLibre: false,
         pizzaSize: pizzaModalSize,
         pizzaConfigType: pizzaModalSize === 'media' ? 'media' : `${pizzaModalFlavorsCount}_flavors`,
-        toppings: [...selectedPizzaFlavors]
+        toppings
     });
 
     closePizzaBuilderModal();
+}
+
+// ============================================================================
+// MODAL PIZZA LIBRE (1RA RONDA Y SIGUIENTES RONDAS)
+// ============================================================================
+function openPizzaLibreModal(item) {
+    pizzaLibreModalType = item.libreType || 'G';
+    pizzaLibreModalPrice = Number(item.price) || Number(mozosPrices?.pizzaLibreG || mozosPrices?.pizzaLibreH) || 16000;
+    pizzaLibreModalName = item.name || 'Pizza Libre General';
+    pizzaLibreCount = 1;
+    selectedLibreExclusions = [];
+
+    const countEl = document.getElementById('pizza-libre-count');
+    if (countEl) countEl.textContent = '1';
+
+    const totalEl = document.getElementById('pizza-libre-total-display');
+    if (totalEl) totalEl.textContent = `$${pizzaLibreModalPrice.toLocaleString('es-AR')}`;
+
+    const textEl = document.getElementById('pizza-libre-exclusions-text');
+    if (textEl) textEl.value = '';
+
+    const chipsContainer = document.getElementById('pizza-libre-exclusion-chips');
+    if (chipsContainer) {
+        const flavors = getPizzaFlavorsCatalog();
+        chipsContainer.innerHTML = flavors.map(f => {
+            const safe = f.name.replace(/'/g, "\\'");
+            return `
+                <button type="button" onclick="toggleLibreExclusionChip('${safe}')"
+                    id="excl-chip-${f.name}"
+                    class="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all">
+                    Sin ${f.name}
+                </button>
+            `;
+        }).join('');
+    }
+
+    const modal = document.getElementById('pizza-libre-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closePizzaLibreModal() {
+    const modal = document.getElementById('pizza-libre-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function changePizzaLibreCount(delta) {
+    pizzaLibreCount = Math.max(1, pizzaLibreCount + delta);
+    const countEl = document.getElementById('pizza-libre-count');
+    if (countEl) countEl.textContent = String(pizzaLibreCount);
+    const totalEl = document.getElementById('pizza-libre-total-display');
+    if (totalEl) totalEl.textContent = `$${(pizzaLibreModalPrice * pizzaLibreCount).toLocaleString('es-AR')}`;
+}
+
+function toggleLibreExclusionChip(flavorName) {
+    const idx = selectedLibreExclusions.indexOf(flavorName);
+    if (idx !== -1) selectedLibreExclusions.splice(idx, 1);
+    else selectedLibreExclusions.push(flavorName);
+
+    const textEl = document.getElementById('pizza-libre-exclusions-text');
+    if (textEl) {
+        textEl.value = selectedLibreExclusions.map(f => `Sin ${f}`).join(', ');
+    }
+}
+
+function confirmAddPizzaLibre() {
+    const textEl = document.getElementById('pizza-libre-exclusions-text');
+    const note = textEl ? textEl.value.trim() : '';
+
+    addDirectItemToOrder({
+        id: `pizza_libre_${pizzaLibreModalType.toLowerCase()}`,
+        name: pizzaLibreModalName,
+        price: pizzaLibreModalPrice,
+        qty: pizzaLibreCount,
+        note,
+        isPizza: true,
+        isPizzaLibre: true,
+        libreType: pizzaLibreModalType
+    });
+
+    closePizzaLibreModal();
+}
+
+function openNextRoundModal() {
+    if (!currentTable || !ordersByTable[currentTable]) return;
+    const tableOrder = ordersByTable[currentTable];
+    const nextRound = (Number(tableOrder.libreRounds) || 1) + 1;
+    selectedNextRoundFlavors = [];
+
+    const titleEl = document.getElementById('next-round-modal-title');
+    if (titleEl) titleEl.textContent = `Pedir Ronda #${nextRound}`;
+
+    const exclIn = document.getElementById('next-round-exclusions-input');
+    if (exclIn) exclIn.value = tableOrder.note || '';
+
+    const notesIn = document.getElementById('next-round-notes');
+    if (notesIn) notesIn.value = '';
+
+    const chipsEl = document.getElementById('next-round-flavor-chips');
+    if (chipsEl) {
+        const flavors = getPizzaFlavorsCatalog();
+        chipsEl.innerHTML = flavors.map(f => {
+            const safe = f.name.replace(/'/g, "\\'");
+            return `
+                <button type="button" onclick="toggleNextRoundChip('${safe}')"
+                    class="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-[#2563eb]">
+                    + ${f.name}
+                </button>
+            `;
+        }).join('');
+    }
+
+    const modal = document.getElementById('pizza-libre-next-round-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeNextRoundModal() {
+    const modal = document.getElementById('pizza-libre-next-round-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function toggleNextRoundChip(flavorName) {
+    selectedNextRoundFlavors.push(flavorName);
+    const notesIn = document.getElementById('next-round-notes');
+    if (notesIn) {
+        notesIn.value = selectedNextRoundFlavors.join(', ');
+    }
+}
+
+async function confirmAddNextRound() {
+    if (!currentTable || !ordersByTable[currentTable]) return;
+    const tableOrder = ordersByTable[currentTable];
+    tableOrder.libreRounds = (Number(tableOrder.libreRounds) || 1) + 1;
+
+    const exclIn = document.getElementById('next-round-exclusions-input');
+    const notesIn = document.getElementById('next-round-notes');
+    const combinedNote = [exclIn ? exclIn.value.trim() : '', notesIn ? notesIn.value.trim() : ''].filter(Boolean).join(' | ');
+
+    isSavingOrder = true;
+    try {
+        const res = await fetch('/api/orders/send-kitchen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                table: currentTable,
+                waiter: tableOrder.waiter || currentUser || 'Mozo',
+                note: combinedNote || tableOrder.note || '',
+                items: tableOrder.items,
+                newItemsToSend: [{
+                    id: 'pizza_libre_round',
+                    name: `Ronda #${tableOrder.libreRounds} Pizza Libre`,
+                    isPizza: true,
+                    isPizzaLibre: true,
+                    isLibreRound: true,
+                    sendQty: 1,
+                    price: 0,
+                    note: combinedNote
+                }],
+                libreRound: tableOrder.libreRounds
+            })
+        });
+        if (res.ok) {
+            closeNextRoundModal();
+            renderMenuItems();
+            renderOrder();
+            showToast(`Ronda #${tableOrder.libreRounds} enviada a la cola de Sistema Pedidos`, 'success');
+        }
+    } catch (e) {
+        showToast('Error al enviar siguiente ronda', 'error');
+    } finally {
+        isSavingOrder = false;
+        await fetchServerState(true);
+    }
 }
 
 // ============================================================================
@@ -1031,7 +1295,7 @@ async function addDirectItemToOrder(newItem) {
     if (!tableOrder) return;
 
     if (tableOrder.isPaid) {
-        showToast('Esta mesa figura PAGADA. Libérala o desmarca el pago antes de cargar nuevos productos.', 'error');
+        showToast('Esta mesa figura PAGADA. Libérala o desmarca el pago antes de agregar productos.', 'error');
         return;
     }
 
@@ -1066,6 +1330,7 @@ async function addDirectItemToOrder(newItem) {
     }
 
     renderOrder();
+    renderMenuItems();
     await saveCurrentTableToServer();
     showToast(`Agregado: ${newItem.name}`, 'success');
 }
@@ -1089,10 +1354,11 @@ async function changeOrderItemQty(index, delta) {
     }
 
     renderOrder();
+    renderMenuItems();
     await saveCurrentTableToServer();
 }
 
-function updateCurrentOrderNote(val) {
+function saveCurrentNote(val) {
     if (!currentTable || !ordersByTable[currentTable]) return;
     ordersByTable[currentTable].note = val;
     saveCurrentTableToServer();
@@ -1121,14 +1387,15 @@ async function saveCurrentTableToServer() {
 }
 
 function renderOrder(skipNoteUpdate = false) {
-    const listEl = document.getElementById('order-list');
-    const subtotalEl = document.getElementById('subtotal-price');
-    const totalEl = document.getElementById('total-price');
-    const noteInput = document.getElementById('order-note-input');
-    const libreBanner = document.getElementById('pizza-libre-rounds-banner');
-    const roundBadge = document.getElementById('libre-round-counter');
-    const mobileCount = document.getElementById('mobile-cart-count-badge');
-    const mobileTotal = document.getElementById('mobile-cart-total-badge');
+    const listEl = document.getElementById('order-items-list');
+    const totalEl = document.getElementById('order-total-price');
+    const noteInput = document.getElementById('order-note');
+    const countBadge = document.getElementById('item-count-badge');
+    const drawerTitleMobile = document.getElementById('drawer-title-mobile');
+    const drawerTotalPreview = document.getElementById('drawer-total-preview');
+    const payBtn = document.getElementById('pay-table-btn');
+    const sendBtn = document.getElementById('send-order-btn');
+    const unsentBanner = document.getElementById('table-unsent-alert-banner');
 
     if (!currentTable || !ordersByTable[currentTable]) return;
     const tableOrder = ordersByTable[currentTable];
@@ -1138,28 +1405,38 @@ function renderOrder(skipNoteUpdate = false) {
         noteInput.value = tableOrder.note || '';
     }
 
-    const hasPizzaLibre = items.some(it => it.isPizzaLibre);
-    if (libreBanner) {
-        if (hasPizzaLibre && !tableOrder.isPaid) {
-            libreBanner.classList.remove('hidden');
-            if (roundBadge) roundBadge.textContent = `Ronda #${tableOrder.libreRounds || 1}`;
-        } else {
-            libreBanner.classList.add('hidden');
-        }
-    }
-
     let total = 0;
     let totalItemsCount = 0;
+    let unsentCount = 0;
 
     items.forEach(it => {
-        total += (Number(it.price) || 0) * (Number(it.qty) || 0);
-        totalItemsCount += Number(it.qty) || 0;
+        const q = Number(it.qty) || 0;
+        const sq = Number(it.sentQty) || 0;
+        total += (Number(it.price) || 0) * q;
+        totalItemsCount += q;
+        if (q > sq) unsentCount += (q - sq);
     });
 
-    if (subtotalEl) subtotalEl.textContent = `$${total.toLocaleString('es-AR')}`;
     if (totalEl) totalEl.textContent = `$${total.toLocaleString('es-AR')}`;
-    if (mobileCount) mobileCount.textContent = String(totalItemsCount);
-    if (mobileTotal) mobileTotal.textContent = `$${total.toLocaleString('es-AR')}`;
+    if (countBadge) countBadge.textContent = `${totalItemsCount} ítems`;
+    if (drawerTitleMobile) drawerTitleMobile.textContent = `Ver Comanda (${totalItemsCount} ítems)`;
+    if (drawerTotalPreview) drawerTotalPreview.textContent = `$${total.toLocaleString('es-AR')}`;
+
+    if (payBtn) payBtn.disabled = totalItemsCount === 0 || !!tableOrder.isPaid;
+    if (sendBtn) sendBtn.disabled = unsentCount === 0 || !!tableOrder.isPaid;
+
+    if (unsentBanner) {
+        if (unsentCount > 0 && !tableOrder.isPaid) {
+            unsentBanner.className = 'bg-amber-50 border-b border-amber-200 px-3 py-2 flex items-center justify-between text-xs text-amber-900';
+            unsentBanner.innerHTML = `
+                <span><i class="fa-solid fa-bell text-amber-600 mr-1.5"></i>Tienes <strong>${unsentCount} producto(s)</strong> sin enviar a cocina.</span>
+                <button onclick="sendOrderToKitchen()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2.5 py-1 rounded-lg text-[11px]">Enviar Ahora</button>
+            `;
+        } else {
+            unsentBanner.className = 'hidden';
+            unsentBanner.innerHTML = '';
+        }
+    }
 
     if (!listEl) return;
 
@@ -1168,23 +1445,23 @@ function renderOrder(skipNoteUpdate = false) {
     if (tableOrder.isPaid) {
         const safeTable = currentTable.replace(/'/g, "\\'");
         html += `
-            <div class="p-3.5 rounded-2xl bg-emerald-500/20 border-2 border-emerald-500/60 text-emerald-200 mb-3">
+            <div class="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-500 text-emerald-900 mb-2">
                 <div class="flex items-center justify-between mb-1">
-                    <span class="font-black text-xs uppercase tracking-wider text-emerald-300">
+                    <span class="font-extrabold text-xs uppercase text-emerald-700">
                         <i class="fa-solid fa-circle-check mr-1"></i> MESA PAGADA
                     </span>
-                    <span class="font-black text-sm text-white">$${(tableOrder.paidAmount || total).toLocaleString('es-AR')}</span>
+                    <span class="font-extrabold text-sm">$${(tableOrder.paidAmount || total).toLocaleString('es-AR')}</span>
                 </div>
-                <p class="text-[11px] text-emerald-300/90 mb-2.5">
-                    Ya puedes imprimir el ticket desde la PC de Sistema Mozos o liberar la mesa para nuevos clientes.
+                <p class="text-[11px] text-emerald-700 mb-2.5">
+                    El ticket se puede imprimir desde la PC de Sistema Mozos. Cuando se retiren los clientes, libera la mesa.
                 </p>
                 <div class="flex gap-2">
                     <button onclick="freePaidTable('${safeTable}', event)"
-                        class="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">
-                        <i class="fa-solid fa-broom mr-1"></i> Liberar Mesa (Nueva Cuenta)
+                        class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm">
+                        <i class="fa-solid fa-broom mr-1"></i> Liberar Mesa
                     </button>
                     <button onclick="unpayTable('${safeTable}', event)"
-                        class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700">
+                        class="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-300">
                         Desmarcar
                     </button>
                 </div>
@@ -1194,8 +1471,8 @@ function renderOrder(skipNoteUpdate = false) {
 
     if (items.length === 0) {
         html += `
-            <div class="text-center py-10 text-slate-500">
-                <i class="fa-solid fa-utensils text-2xl mb-2 opacity-40"></i>
+            <div class="text-center py-8 text-slate-400">
+                <i class="fa-solid fa-receipt text-2xl mb-2 opacity-40"></i>
                 <p class="text-xs">La comanda de esta mesa está vacía.</p>
             </div>
         `;
@@ -1207,26 +1484,26 @@ function renderOrder(skipNoteUpdate = false) {
             const lineTotal = (Number(it.price) || 0) * qty;
 
             return `
-                <div class="p-3 rounded-xl bg-slate-800/90 border ${pending > 0 ? 'border-amber-500/40' : 'border-slate-700/70'} flex items-center justify-between gap-2">
+                <div class="py-2.5 flex items-center justify-between gap-2">
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="font-bold text-white text-xs sm:text-sm">${it.name}</span>
+                            <span class="font-bold text-slate-900 text-xs sm:text-sm">${it.name}</span>
                             ${pending > 0
-                                ? `<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">${pending} sin enviar</span>`
-                                : `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">Enviado</span>`
+                                ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">${pending} sin enviar</span>`
+                                : `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Enviado</span>`
                             }
                         </div>
-                        ${it.note ? `<p class="text-[11px] text-amber-300/90 italic mt-0.5">"${it.note}"</p>` : ''}
-                        <p class="text-xs font-bold text-orange-400 mt-0.5">$${lineTotal.toLocaleString('es-AR')}</p>
+                        ${it.note ? `<p class="text-[11px] text-amber-700 italic mt-0.5">"${it.note}"</p>` : ''}
+                        <p class="text-xs font-extrabold text-[#2563eb] mt-0.5">$${lineTotal.toLocaleString('es-AR')}</p>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
                         <button onclick="changeOrderItemQty(${idx}, -1)"
-                            class="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center justify-center">
+                            class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">
                             <i class="fa-solid fa-minus text-[10px]"></i>
                         </button>
-                        <span class="w-6 text-center font-extrabold text-white text-sm">${qty}</span>
+                        <span class="w-6 text-center font-extrabold text-slate-900 text-xs sm:text-sm">${qty}</span>
                         <button onclick="changeOrderItemQty(${idx}, 1)"
-                            class="w-7 h-7 rounded-lg bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs flex items-center justify-center">
+                            class="w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#2563eb] font-bold text-xs flex items-center justify-center border border-blue-200">
                             <i class="fa-solid fa-plus text-[10px]"></i>
                         </button>
                     </div>
@@ -1247,11 +1524,6 @@ async function sendOrderToKitchen() {
     }
 
     const items = Array.isArray(tableOrder.items) ? tableOrder.items : [];
-    if (items.length === 0) {
-        showToast('Agrega productos a la mesa antes de enviar', 'error');
-        return;
-    }
-
     const newItemsToSend = [];
     items.forEach(it => {
         const diff = (Number(it.qty) || 0) - (Number(it.sentQty) || 0);
@@ -1264,7 +1536,7 @@ async function sendOrderToKitchen() {
     });
 
     if (newItemsToSend.length === 0) {
-        showToast('Todos los productos actuales ya fueron enviados. Modifica cantidades o agrega productos nuevos.', 'info');
+        showToast('Todos los productos actuales ya fueron enviados.', 'info');
         return;
     }
 
@@ -1288,7 +1560,7 @@ async function sendOrderToKitchen() {
                 it.sentQty = Number(it.qty) || 0;
             });
             renderOrder();
-            showToast('¡Comanda enviada! Pizzas/Empanadas en cola de Pedidos y mesa actualizada en Sistema Mozos.', 'success');
+            showToast('¡Enviado! Pizzas y empanadas en cola de Sistema Pedidos y mesa actualizada en Sistema Mozos.', 'success');
         } else {
             showToast(data.error || 'Error al enviar comanda', 'error');
         }
@@ -1300,74 +1572,48 @@ async function sendOrderToKitchen() {
     }
 }
 
-async function sendNextPizzaLibreRound() {
-    if (!currentTable || !ordersByTable[currentTable]) return;
-    const tableOrder = ordersByTable[currentTable];
-    tableOrder.libreRounds = (Number(tableOrder.libreRounds) || 1) + 1;
-
-    isSavingOrder = true;
-    try {
-        const res = await fetch('/api/orders/send-kitchen', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                table: currentTable,
-                waiter: tableOrder.waiter || currentUser || 'Mozo',
-                note: tableOrder.note || '',
-                items: tableOrder.items,
-                newItemsToSend: [{
-                    id: 'pizza_libre_round',
-                    name: `Ronda #${tableOrder.libreRounds} Pizza Libre`,
-                    isPizza: true,
-                    isPizzaLibre: true,
-                    isLibreRound: true,
-                    sendQty: 1,
-                    price: 0
-                }],
-                libreRound: tableOrder.libreRounds
-            })
-        });
-        if (res.ok) {
-            renderOrder();
-            showToast(`Ronda #${tableOrder.libreRounds} de Pizza Libre enviada a la cola de Sistema Pedidos`, 'success');
-        }
-    } catch (e) {
-        showToast('Error al pedir ronda de Pizza Libre', 'error');
-    } finally {
-        isSavingOrder = false;
-        await fetchServerState(true);
-    }
-}
-
 // ============================================================================
 // COBRO DE MESA (SINCRONIZADO CON SISTEMA_MOZOS)
 // ============================================================================
-function openPaymentModal() {
-    if (!currentTable || !ordersByTable[currentTable]) return;
-    const tableOrder = ordersByTable[currentTable];
-    const items = Array.isArray(tableOrder.items) ? tableOrder.items : [];
+function openPaymentByTable(tableName, event) {
+    if (event) event.stopPropagation();
+    const target = tableName || currentTable;
+    if (!target || !ordersByTable[target]) return;
 
+    const tableOrder = ordersByTable[target];
+    const items = Array.isArray(tableOrder.items) ? tableOrder.items : [];
     if (items.length === 0) {
         showToast('La mesa no tiene productos cargados para cobrar', 'error');
         return;
     }
 
+    checkoutTableTarget = target;
     currentCheckoutSubtotal = items.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
     selectedPaymentMethod = 'Efectivo';
-    selectedTipPercent = 0;
 
-    const subName = document.getElementById('payment-modal-table-name');
-    const subAmount = document.getElementById('payment-modal-subtotal');
-    const tipCustom = document.getElementById('payment-custom-tip');
+    const subtitleEl = document.getElementById('pay-modal-subtitle');
+    const totalEl = document.getElementById('pay-modal-total');
+    const waiterSel = document.getElementById('pay-waiter-select');
+    const cashIn = document.getElementById('cash-paid-input');
+    const tipEl = document.getElementById('tip-calculated-display');
     const freeCheck = document.getElementById('free-table-after-pay-checkbox');
 
-    if (subName) subName.textContent = `${currentTable} • Mozo: ${tableOrder.waiter || currentUser}`;
-    if (subAmount) subAmount.textContent = `$${currentCheckoutSubtotal.toLocaleString('es-AR')}`;
-    if (tipCustom) tipCustom.value = '';
+    if (subtitleEl) subtitleEl.textContent = target;
+    if (totalEl) totalEl.textContent = `$${currentCheckoutSubtotal.toLocaleString('es-AR')}`;
+
+    if (waiterSel) {
+        const names = staffList.map(s => s.name);
+        if (currentUser && !names.includes(currentUser)) names.unshift(currentUser);
+        waiterSel.innerHTML = names.map(n =>
+            `<option value="${n}" ${n === (tableOrder.waiter || currentUser) ? 'selected' : ''}>${n}</option>`
+        ).join('');
+    }
+
+    if (cashIn) cashIn.value = String(currentCheckoutSubtotal);
+    if (tipEl) tipEl.textContent = '$0';
     if (freeCheck) freeCheck.checked = false;
 
     selectPaymentMethod('Efectivo');
-    setTipPercentage(0);
 
     const modal = document.getElementById('payment-modal');
     if (modal) modal.classList.remove('hidden');
@@ -1380,125 +1626,53 @@ function closePaymentModal() {
 
 function selectPaymentMethod(method) {
     selectedPaymentMethod = method;
-    const map = {
-        'Efectivo': 'pay-method-efectivo',
-        'Transferencia': 'pay-method-transferencia',
-        'Mixto': 'pay-method-mixto'
-    };
+    const btnEf = document.getElementById('btn-method-efectivo');
+    const btnTr = document.getElementById('btn-method-transferencia');
 
-    Object.entries(map).forEach(([m, elId]) => {
-        const btn = document.getElementById(elId);
-        if (!btn) return;
-        if (m === method) {
-            btn.className = 'py-3 px-2 rounded-xl border border-emerald-500 bg-emerald-500/15 text-emerald-300 font-bold text-xs flex flex-col items-center gap-1.5 transition-all';
+    if (btnEf && btnTr) {
+        if (method === 'Efectivo') {
+            btnEf.className = 'py-2.5 px-3 rounded-xl border-2 border-[#2563eb] bg-blue-50/70 text-[#2563eb] font-bold text-xs flex items-center justify-center space-x-2 transition-all';
+            btnTr.className = 'py-2.5 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-semibold text-xs flex items-center justify-center space-x-2 transition-all';
         } else {
-            btn.className = 'py-3 px-2 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 font-bold text-xs flex flex-col items-center gap-1.5 transition-all';
-        }
-    });
-
-    const mixtoBox = document.getElementById('mixto-inputs-container');
-    if (mixtoBox) {
-        if (method === 'Mixto') {
-            mixtoBox.classList.remove('hidden');
-            const totalNow = getCurrentCheckoutTotalWithTip();
-            const half = Math.round(totalNow / 2);
-            const cashIn = document.getElementById('mixto-cash-input');
-            const transIn = document.getElementById('mixto-transfer-input');
-            if (cashIn) cashIn.value = String(half);
-            if (transIn) transIn.value = String(totalNow - half);
-        } else {
-            mixtoBox.classList.add('hidden');
+            btnTr.className = 'py-2.5 px-3 rounded-xl border-2 border-[#2563eb] bg-blue-50/70 text-[#2563eb] font-bold text-xs flex items-center justify-center space-x-2 transition-all';
+            btnEf.className = 'py-2.5 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-semibold text-xs flex items-center justify-center space-x-2 transition-all';
         }
     }
 }
 
-function setTipPercentage(pct) {
-    selectedTipPercent = pct;
-    const customInput = document.getElementById('payment-custom-tip');
-    if (customInput) {
-        if (pct === 0) {
-            customInput.value = '';
-        } else {
-            customInput.value = String(Math.round(currentCheckoutSubtotal * (pct / 100)));
-        }
-    }
-    updatePaymentTotalDisplay();
-}
-
-function onCustomTipInput() {
-    selectedTipPercent = -1;
-    updatePaymentTotalDisplay();
-}
-
-function getCurrentTipAmount() {
-    const customInput = document.getElementById('payment-custom-tip');
-    return customInput ? Math.max(0, Number(customInput.value) || 0) : 0;
-}
-
-function getCurrentCheckoutTotalWithTip() {
-    return currentCheckoutSubtotal + getCurrentTipAmount();
-}
-
-function updatePaymentTotalDisplay() {
-    const total = getCurrentCheckoutTotalWithTip();
-    const totalEl = document.getElementById('payment-modal-final-total');
-    if (totalEl) totalEl.textContent = `$${total.toLocaleString('es-AR')}`;
-
-    if (selectedPaymentMethod === 'Mixto') {
-        const cashIn = document.getElementById('mixto-cash-input');
-        const transIn = document.getElementById('mixto-transfer-input');
-        if (cashIn && transIn) {
-            const cashVal = Number(cashIn.value) || 0;
-            transIn.value = String(Math.max(0, total - cashVal));
-        }
-    }
-}
-
-function balanceMixtoAmounts(changedType) {
-    const total = getCurrentCheckoutTotalWithTip();
-    const cashIn = document.getElementById('mixto-cash-input');
-    const transIn = document.getElementById('mixto-transfer-input');
-    if (!cashIn || !transIn) return;
-
-    if (changedType === 'cash') {
-        const c = Math.max(0, Number(cashIn.value) || 0);
-        transIn.value = String(Math.max(0, total - c));
-    } else {
-        const t = Math.max(0, Number(transIn.value) || 0);
-        cashIn.value = String(Math.max(0, total - t));
-    }
+function onCashPaidInput() {
+    const cashIn = document.getElementById('cash-paid-input');
+    const tipEl = document.getElementById('tip-calculated-display');
+    const paid = Number(cashIn ? cashIn.value : 0) || 0;
+    const tip = Math.max(0, paid - currentCheckoutSubtotal);
+    if (tipEl) tipEl.textContent = `$${tip.toLocaleString('es-AR')}`;
 }
 
 async function confirmPaymentAndFinish() {
-    if (!currentTable || !ordersByTable[currentTable]) return;
-    const tableOrder = ordersByTable[currentTable];
+    const target = checkoutTableTarget || currentTable;
+    if (!target || !ordersByTable[target]) return;
+    const tableOrder = ordersByTable[target];
 
-    const tipAmount = getCurrentTipAmount();
-    const totalPaid = currentCheckoutSubtotal + tipAmount;
-    const freeCheckbox = document.getElementById('free-table-after-pay-checkbox');
-    const freeTableAfterPay = freeCheckbox ? !!freeCheckbox.checked : false;
+    const cashIn = document.getElementById('cash-paid-input');
+    const waiterSel = document.getElementById('pay-waiter-select');
+    const freeCheck = document.getElementById('free-table-after-pay-checkbox');
 
-    let cashAmount = 0;
-    let transferAmount = 0;
+    const rawPaid = Number(cashIn ? cashIn.value : 0);
+    const totalPaid = (!isNaN(rawPaid) && rawPaid >= currentCheckoutSubtotal) ? rawPaid : currentCheckoutSubtotal;
+    const tipAmount = Math.max(0, totalPaid - currentCheckoutSubtotal);
+    const waiter = waiterSel ? waiterSel.value : (tableOrder.waiter || currentUser || 'Mozo');
+    const freeTableAfterPay = freeCheck ? !!freeCheck.checked : false;
 
-    if (selectedPaymentMethod === 'Efectivo') {
-        cashAmount = totalPaid;
-    } else if (selectedPaymentMethod === 'Transferencia') {
-        transferAmount = totalPaid;
-    } else {
-        const cashIn = document.getElementById('mixto-cash-input');
-        const transIn = document.getElementById('mixto-transfer-input');
-        cashAmount = Number(cashIn ? cashIn.value : 0) || 0;
-        transferAmount = Number(transIn ? transIn.value : 0) || 0;
-    }
+    const cashAmount = selectedPaymentMethod === 'Efectivo' ? totalPaid : 0;
+    const transferAmount = selectedPaymentMethod === 'Transferencia' ? totalPaid : 0;
 
     try {
         const res = await fetch('/api/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                table: currentTable,
-                waiter: tableOrder.waiter || currentUser || 'Mozo',
+                table: target,
+                waiter,
                 paymentMethod: selectedPaymentMethod,
                 subtotal: currentCheckoutSubtotal,
                 tipAmount,
@@ -1513,14 +1687,14 @@ async function confirmPaymentAndFinish() {
         const data = await res.json();
         if (res.ok && data.success) {
             closePaymentModal();
-            closeMobileCartDrawer();
             await fetchServerState(true);
             if (freeTableAfterPay) {
-                showToast(`${currentTable} cobrada y liberada para nuevos clientes`, 'success');
-                backToTablesGrid();
+                showToast(`${target} cobrada y liberada para nuevos clientes`, 'success');
             } else {
-                showToast(`${currentTable} marcada como PAGADA en Sistema Mozos y Humboldt`, 'success');
-                backToTablesGrid();
+                showToast(`${target} marcada como PAGADA en Sistema Mozos y Humboldt`, 'success');
+            }
+            if (currentTable === target) {
+                backToTablesView();
             }
         } else {
             showToast(data.error || 'Error al registrar el cobro', 'error');
@@ -1531,9 +1705,81 @@ async function confirmPaymentAndFinish() {
 }
 
 // ============================================================================
+// MODALES DE HISTORIAL DE PAGOS Y CAJA DE PROPINAS
+// ============================================================================
+function openPaymentHistoryModal() {
+    renderPaymentHistoryModalContent();
+    const modal = document.getElementById('payment-history-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closePaymentHistoryModal() {
+    const modal = document.getElementById('payment-history-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderPaymentHistoryModalContent() {
+    let sales = 0, cash = 0, trans = 0;
+    paymentHistory.forEach(p => {
+        sales += Number(p.subtotal) || 0;
+        cash += Number(p.cashAmount) || 0;
+        trans += Number(p.transferAmount) || 0;
+    });
+
+    const elSales = document.getElementById('reg-total-sales');
+    const elCash = document.getElementById('reg-total-cash');
+    const elTrans = document.getElementById('reg-total-transfer');
+    const elTips = document.getElementById('reg-total-tips');
+
+    if (elSales) elSales.textContent = `$${sales.toLocaleString('es-AR')}`;
+    if (elCash) elCash.textContent = `$${cash.toLocaleString('es-AR')}`;
+    if (elTrans) elTrans.textContent = `$${trans.toLocaleString('es-AR')}`;
+    if (elTips) elTips.textContent = `$${generalTipsPool.toLocaleString('es-AR')}`;
+
+    const listEl = document.getElementById('payment-history-list');
+    if (!listEl) return;
+
+    if (paymentHistory.length === 0) {
+        listEl.innerHTML = `<p class="text-slate-400 text-xs text-center py-6">No hay pagos registrados en este turno.</p>`;
+        return;
+    }
+
+    listEl.innerHTML = paymentHistory.map(p => `
+        <div class="py-2.5 flex items-center justify-between text-xs">
+            <div>
+                <span class="font-bold text-slate-900">${p.table}</span>
+                <span class="text-slate-500 ml-1">• ${p.waiter} (${p.method})</span>
+                <span class="text-[10px] text-slate-400 block">${p.timestamp || ''}</span>
+            </div>
+            <div class="text-right">
+                <span class="font-bold text-emerald-600 block">$${Number(p.totalPaid).toLocaleString('es-AR')}</span>
+                ${p.tip > 0 ? `<span class="text-[10px] text-[#2563eb] font-semibold">Propina: $${Number(p.tip).toLocaleString('es-AR')}</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function openTipsModal() {
+    const totalEl = document.getElementById('tips-grand-total');
+    if (totalEl) totalEl.textContent = `$${generalTipsPool.toLocaleString('es-AR')}`;
+    const modal = document.getElementById('tips-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeTipsModal() {
+    const modal = document.getElementById('tips-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function openPaymentHistoryFromTips() {
+    closeTipsModal();
+    openPaymentHistoryModal();
+}
+
+// ============================================================================
 // PANEL DE ADMINISTRACIÓN (CARTA DE PRECIOS MOZOS, REPORTES, PERSONAL)
 // ============================================================================
-function switchAdminSubTab(tab) {
+function switchAdminTab(tab) {
     currentAdminSubTab = tab;
     const tabs = ['menu', 'report', 'staff'];
     tabs.forEach(t => {
@@ -1541,8 +1787,8 @@ function switchAdminSubTab(tab) {
         const view = document.getElementById(`admin-subview-${t}`);
         if (btn) {
             btn.className = t === tab
-                ? 'flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                : 'flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all bg-slate-800 text-slate-400 hover:text-white';
+                ? 'flex-1 min-w-fit px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#2563eb] shadow-sm transition-all flex items-center justify-center space-x-1.5 whitespace-nowrap active:scale-95'
+                : 'flex-1 min-w-fit px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all flex items-center justify-center space-x-1.5 whitespace-nowrap active:scale-95';
         }
         if (view) {
             if (t === tab) view.classList.remove('hidden');
@@ -1563,76 +1809,78 @@ function renderAdminActiveSubTab() {
 }
 
 function renderAdminMenuManager() {
-    const catSelect = document.getElementById('admin-new-item-category');
+    const catSelect = document.getElementById('new-item-cat');
     if (catSelect) {
         catSelect.innerHTML = menuData.map(c =>
-            `<option value="${c.id}" ${c.id === currentAdminMenuCatId ? 'selected' : ''}>${c.name}</option>`
+            `<option value="${c.id}">${c.name}</option>`
         ).join('');
     }
 
-    const tabsEl = document.getElementById('admin-menu-categories-tabs');
-    if (tabsEl) {
-        tabsEl.innerHTML = menuData.map(c => `
-            <button onclick="selectAdminMenuCat('${c.id}')"
-                class="px-3.5 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all ${
-                    c.id === currentAdminMenuCatId
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-slate-800 text-slate-400 hover:text-white'
-                }">
-                ${c.name}
-            </button>
+    const catList = document.getElementById('admin-categories-list');
+    if (catList) {
+        catList.innerHTML = menuData.map(c => `
+            <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <span class="font-semibold text-slate-700"><i class="fa-solid ${c.icon} text-[#2563eb] mr-1.5"></i>${c.name}</span>
+                <span class="text-[10px] font-bold text-slate-500">${(c.items || []).length} ítems</span>
+            </div>
         `).join('');
     }
+
+    const totalBadge = document.getElementById('admin-total-products-badge');
+    const totalCount = menuData.reduce((acc, c) => acc + (c.items ? c.items.length : 0), 0);
+    if (totalBadge) totalBadge.textContent = `${totalCount} ítems`;
 
     const listEl = document.getElementById('admin-menu-items-list');
     if (!listEl) return;
 
-    const cat = menuData.find(c => c.id === currentAdminMenuCatId) || menuData[0];
-    if (!cat || !Array.isArray(cat.items)) {
-        listEl.innerHTML = '';
-        return;
-    }
+    listEl.innerHTML = menuData.map(cat => `
+        <div class="space-y-2">
+            <h5 class="font-bold text-xs text-[#2563eb] uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid ${cat.icon}"></i>
+                <span>${cat.name}</span>
+            </h5>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                ${(cat.items || []).map(item => {
+                    const safeId = String(item.id).replace(/'/g, "\\'");
+                    const safeName = String(item.name).replace(/'/g, "\\'");
+                    const safeDesc = String(item.desc || '').replace(/'/g, "\\'");
+                    const canDelete = String(item.id).startsWith('pizza_flavor_') || String(item.id).startsWith('bev_');
 
-    listEl.innerHTML = cat.items.map(item => {
-        const safeId = String(item.id).replace(/'/g, "\\'");
-        const safeName = String(item.name).replace(/'/g, "\\'");
-        const canDelete = String(item.id).startsWith('pizza_flavor_') || String(item.id).startsWith('bev_');
-
-        return `
-            <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2">
-                <div>
-                    <p class="font-bold text-white text-sm">${item.name}</p>
-                    <p class="text-xs font-extrabold text-orange-400">
-                        $${Number(item.price).toLocaleString('es-AR')}
-                        ${item.precioMedia ? `<span class="text-slate-400 font-normal ml-1">(Media: $${Number(item.precioMedia).toLocaleString('es-AR')})</span>` : ''}
-                    </p>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <button onclick="openEditMenuItemModal('${safeId}', '${safeName}', ${Number(item.price) || 0})"
-                        class="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
-                    ${canDelete ? `
-                        <button onclick="deleteAdminMenuItem('${safeId}')"
-                            class="p-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs border border-red-500/30">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    ` : ''}
-                </div>
+                    return `
+                        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="font-bold text-slate-900 text-xs truncate">${item.name}</p>
+                                <p class="text-xs font-extrabold text-[#2563eb]">$${Number(item.price).toLocaleString('es-AR')}</p>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="openEditMenuItemModal('${cat.id}', '${safeId}', '${safeName}', ${Number(item.price) || 0}, '${safeDesc}')"
+                                    class="p-2 rounded-lg bg-white hover:bg-blue-50 text-slate-600 hover:text-[#2563eb] border border-slate-200 text-xs">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                ${canDelete ? `
+                                    <button onclick="deleteAdminMenuItem('${safeId}')"
+                                        class="p-2 rounded-lg bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 text-xs">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
             </div>
-        `;
-    }).join('');
+        </div>
+    `).join('');
 }
 
-function selectAdminMenuCat(catId) {
-    currentAdminMenuCatId = catId;
-    renderAdminMenuManager();
+function createNewCategory() {
+    showToast('Las categorías principales están sincronizadas con la estructura de Sistema Mozos (Pizzas, Empanadas/Postres y Bebidas).', 'info');
 }
 
-async function addNewMenuItemFromAdmin() {
-    const catEl = document.getElementById('admin-new-item-category');
-    const nameEl = document.getElementById('admin-new-item-name');
-    const priceEl = document.getElementById('admin-new-item-price');
+async function addNewMenuItem() {
+    const catEl = document.getElementById('new-item-cat');
+    const nameEl = document.getElementById('new-item-name');
+    const priceEl = document.getElementById('new-item-price');
+    const descEl = document.getElementById('new-item-desc');
 
     const category = catEl ? catEl.value : 'pizzas';
     const name = nameEl ? nameEl.value.trim() : '';
@@ -1652,40 +1900,49 @@ async function addNewMenuItemFromAdmin() {
         if (res.ok) {
             if (nameEl) nameEl.value = '';
             if (priceEl) priceEl.value = '';
+            if (descEl) descEl.value = '';
             await fetchServerState(true);
-            showToast('Producto guardado en la lista de precios de Sistema Mozos', 'success');
+            showToast('Producto agregado y sincronizado con Sistema Mozos', 'success');
         }
     } catch (e) {
         showToast('Error al agregar producto', 'error');
     }
 }
 
-function openEditMenuItemModal(id, name, price) {
-    editingMenuItemId = id;
-    const nameEl = document.getElementById('edit-item-name-input');
-    const priceEl = document.getElementById('edit-item-price-input');
-    if (nameEl) nameEl.value = name;
-    if (priceEl) priceEl.value = String(price);
+function openEditMenuItemModal(catId, itemId, name, price, desc = '') {
+    const catIn = document.getElementById('edit-item-cat');
+    const idIn = document.getElementById('edit-item-id');
+    const nameIn = document.getElementById('edit-item-name');
+    const priceIn = document.getElementById('edit-item-price');
+    const descIn = document.getElementById('edit-item-desc');
 
-    const modal = document.getElementById('edit-menu-item-modal');
+    if (catIn) catIn.value = catId;
+    if (idIn) idIn.value = itemId;
+    if (nameIn) nameIn.value = name;
+    if (priceIn) priceIn.value = String(price);
+    if (descIn) descIn.value = desc;
+
+    const modal = document.getElementById('admin-edit-item-modal');
     if (modal) modal.classList.remove('hidden');
 }
 
 function closeEditMenuItemModal() {
-    editingMenuItemId = null;
-    const modal = document.getElementById('edit-menu-item-modal');
+    const modal = document.getElementById('admin-edit-item-modal');
     if (modal) modal.classList.add('hidden');
 }
 
 async function saveEditedMenuItem() {
-    if (!editingMenuItemId) return;
-    const nameEl = document.getElementById('edit-item-name-input');
-    const priceEl = document.getElementById('edit-item-price-input');
-    const name = nameEl ? nameEl.value.trim() : '';
-    const price = priceEl ? Number(priceEl.value) : 0;
+    const idIn = document.getElementById('edit-item-id');
+    const nameIn = document.getElementById('edit-item-name');
+    const priceIn = document.getElementById('edit-item-price');
+
+    const itemId = idIn ? idIn.value : '';
+    const name = nameIn ? nameIn.value.trim() : '';
+    const price = priceIn ? Number(priceIn.value) : 0;
+    if (!itemId) return;
 
     try {
-        const res = await fetch(`/api/menu/items/${encodeURIComponent(editingMenuItemId)}`, {
+        const res = await fetch(`/api/menu/items/${encodeURIComponent(itemId)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, price })
@@ -1700,89 +1957,149 @@ async function saveEditedMenuItem() {
     }
 }
 
-async function deleteAdminMenuItem(id) {
-    if (!confirm('¿Eliminar este producto de la carta?')) return;
-    try {
-        const res = await fetch(`/api/menu/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        if (res.ok) {
-            await fetchServerState(true);
-            showToast('Producto eliminado', 'info');
+async function deleteAdminMenuItem(itemId) {
+    openConfirmModal(
+        'Eliminar Producto',
+        '¿Deseas eliminar este producto de la carta sincronizada con Sistema Mozos?',
+        async () => {
+            try {
+                const res = await fetch(`/api/menu/items/${encodeURIComponent(itemId)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await fetchServerState(true);
+                    showToast('Producto eliminado', 'info');
+                }
+            } catch (e) {
+                showToast('Error al eliminar producto', 'error');
+            }
         }
-    } catch (e) {
-        showToast('Error al eliminar producto', 'error');
-    }
+    );
 }
 
 // ============================================================================
 // REPORTES Y CIERRE DE NOCHE
 // ============================================================================
 function renderAdminNightReport() {
-    let totalOrders = paymentHistory.length;
+    const totalOrders = paymentHistory.length;
     let totalRevenue = 0;
     let totalCash = 0;
     let totalTransfer = 0;
+    const productCounts = {};
+    const waiterStats = {};
 
     paymentHistory.forEach(p => {
-        totalRevenue += Number(p.subtotal) || 0;
+        const sub = Number(p.subtotal) || 0;
+        const tip = Number(p.tip) || 0;
+        totalRevenue += sub;
         totalCash += Number(p.cashAmount) || 0;
         totalTransfer += Number(p.transferAmount) || 0;
+
+        const w = p.waiter || 'Sin asignar';
+        if (!waiterStats[w]) waiterStats[w] = { tables: 0, sales: 0, tips: 0 };
+        waiterStats[w].tables += 1;
+        waiterStats[w].sales += sub;
+        waiterStats[w].tips += tip;
+
+        (Array.isArray(p.items) ? p.items : []).forEach(it => {
+            const k = it.name || 'Producto';
+            if (!productCounts[k]) productCounts[k] = { qty: 0, revenue: 0 };
+            productCounts[k].qty += Number(it.qty) || 0;
+            productCounts[k].revenue += (Number(it.price) || 0) * (Number(it.qty) || 0);
+        });
     });
 
-    const elOrders = document.getElementById('report-total-orders');
-    const elRev = document.getElementById('report-total-revenue');
-    const elCash = document.getElementById('report-total-cash');
-    const elTrans = document.getElementById('report-total-transfer');
-    const elTips = document.getElementById('report-total-tips');
-
-    if (elOrders) elOrders.textContent = String(totalOrders);
-    if (elRev) elRev.textContent = `$${totalRevenue.toLocaleString('es-AR')}`;
-    if (elCash) elCash.textContent = `$${totalCash.toLocaleString('es-AR')}`;
-    if (elTrans) elTrans.textContent = `$${totalTransfer.toLocaleString('es-AR')}`;
-    if (elTips) elTips.textContent = `$${generalTipsPool.toLocaleString('es-AR')}`;
-
-    const waitersCount = Math.max(1, staffList.filter(s => s.role !== 'admin').length);
+    const avgTicket = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+    const waitersCount = Math.max(1, staffList.length);
     const tipPerWaiter = Math.round(generalTipsPool / waitersCount);
 
-    const tipDist = document.getElementById('report-tips-per-waiter');
-    if (tipDist) {
-        tipDist.textContent = `${waitersCount} mozos activos → $${tipPerWaiter.toLocaleString('es-AR')} c/u`;
+    const kpiTotal = document.getElementById('rep-kpi-total');
+    const kpiOrders = document.getElementById('rep-kpi-orders');
+    const kpiCash = document.getElementById('rep-kpi-cash');
+    const kpiTrans = document.getElementById('rep-kpi-transfer');
+    const kpiTips = document.getElementById('rep-kpi-tips');
+    const kpiSplit = document.getElementById('rep-kpi-tip-split');
+    const kpiAvg = document.getElementById('rep-kpi-avg');
+    const badgeTickets = document.getElementById('rep-tickets-badge');
+
+    if (kpiTotal) kpiTotal.textContent = `$${totalRevenue.toLocaleString('es-AR')}`;
+    if (kpiOrders) kpiOrders.textContent = `${totalOrders} mesas cobradas`;
+    if (kpiCash) kpiCash.textContent = `$${totalCash.toLocaleString('es-AR')}`;
+    if (kpiTrans) kpiTrans.textContent = `$${totalTransfer.toLocaleString('es-AR')}`;
+    if (kpiTips) kpiTips.textContent = `$${generalTipsPool.toLocaleString('es-AR')}`;
+    if (kpiSplit) kpiSplit.textContent = `$${tipPerWaiter.toLocaleString('es-AR')} por mozo`;
+    if (kpiAvg) kpiAvg.textContent = `$${avgTicket.toLocaleString('es-AR')}`;
+    if (badgeTickets) badgeTickets.textContent = `${totalOrders} cobros`;
+
+    const topEl = document.getElementById('rep-top-products-list');
+    if (topEl) {
+        const sortedProds = Object.entries(productCounts).sort((a, b) => b[1].qty - a[1].qty);
+        if (sortedProds.length === 0) {
+            topEl.innerHTML = `<p class="text-slate-400 text-xs text-center py-6">Sin ventas registradas aún.</p>`;
+        } else {
+            topEl.innerHTML = sortedProds.map(([name, info], idx) => `
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-800 truncate">${idx + 1}. ${name}</span>
+                    <span class="font-extrabold text-[#2563eb] shrink-0">${info.qty} u. ($${info.revenue.toLocaleString('es-AR')})</span>
+                </div>
+            `).join('');
+        }
     }
 
-    const paymentsEl = document.getElementById('report-payments-list');
-    if (paymentsEl) {
-        if (paymentHistory.length === 0) {
-            paymentsEl.innerHTML = `<p class="text-slate-500 text-xs py-4 text-center">Sin cobros registrados en este turno.</p>`;
+    const waiterEl = document.getElementById('rep-waiter-breakdown');
+    if (waiterEl) {
+        const entries = Object.entries(waiterStats);
+        if (entries.length === 0) {
+            waiterEl.innerHTML = `<p class="text-slate-400 text-xs text-center py-6">Sin actividad de mozos aún.</p>`;
         } else {
-            paymentsEl.innerHTML = paymentHistory.map(p => `
-                <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700/70 flex items-center justify-between text-xs">
+            waiterEl.innerHTML = entries.map(([w, st]) => `
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                     <div>
-                        <span class="font-bold text-white">${p.table}</span>
-                        <span class="text-slate-400 ml-1">(${p.waiter}) • ${p.method}</span>
-                        <span class="text-slate-500 block text-[10px]">${p.timestamp || ''}</span>
+                        <span class="font-bold text-slate-900">${w}</span>
+                        <span class="text-slate-500 block text-[10px]">${st.tables} mesa(s) cobradas</span>
                     </div>
                     <div class="text-right">
-                        <span class="font-extrabold text-emerald-400 block">$${Number(p.totalPaid).toLocaleString('es-AR')}</span>
-                        ${p.tip > 0 ? `<span class="text-[10px] text-amber-300">Propina: $${Number(p.tip).toLocaleString('es-AR')}</span>` : ''}
+                        <span class="font-bold text-slate-900 block">$${st.sales.toLocaleString('es-AR')}</span>
+                        <span class="text-[10px] text-[#2563eb] font-semibold">Propinas: $${st.tips.toLocaleString('es-AR')}</span>
                     </div>
                 </div>
             `).join('');
         }
     }
 
-    const historyEl = document.getElementById('night-reports-history-list');
-    if (historyEl) {
-        if (nightReports.length === 0) {
-            historyEl.innerHTML = `<p class="text-slate-500 text-xs py-4 text-center">No hay cierres anteriores.</p>`;
+    const tableEl = document.getElementById('rep-payments-table');
+    if (tableEl) {
+        if (paymentHistory.length === 0) {
+            tableEl.innerHTML = `<p class="text-slate-400 text-xs text-center py-6">Sin cobros registrados.</p>`;
         } else {
-            historyEl.innerHTML = nightReports.map(r => `
-                <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between text-xs">
+            tableEl.innerHTML = paymentHistory.map(p => `
+                <div class="py-2.5 flex items-center justify-between text-xs">
                     <div>
-                        <span class="font-bold text-white block">${r.closedAt}</span>
-                        <span class="text-slate-400">${r.totalOrders} mesas cobradas</span>
+                        <span class="font-bold text-slate-900">${p.table}</span>
+                        <span class="text-slate-500 ml-1">(${p.waiter}) • ${p.method}</span>
+                        <span class="text-[10px] text-slate-400 block">${p.timestamp || ''}</span>
                     </div>
                     <div class="text-right">
-                        <span class="font-black text-orange-400 block">$${Number(r.totalRevenue).toLocaleString('es-AR')}</span>
-                        <span class="text-[10px] text-amber-300">Propinas: $${Number(r.totalTips).toLocaleString('es-AR')}</span>
+                        <span class="font-bold text-emerald-600 block">$${Number(p.totalPaid).toLocaleString('es-AR')}</span>
+                        ${p.tip > 0 ? `<span class="text-[10px] text-[#2563eb]">Propina: $${Number(p.tip).toLocaleString('es-AR')}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+
+    const archiveEl = document.getElementById('saved-nights-archive-list');
+    if (archiveEl) {
+        if (nightReports.length === 0) {
+            archiveEl.innerHTML = `<p class="text-slate-400 text-xs text-center py-4">No hay cierres anteriores archivados.</p>`;
+        } else {
+            archiveEl.innerHTML = nightReports.map(r => `
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <div>
+                        <span class="font-bold text-slate-900 block">${r.closedAt}</span>
+                        <span class="text-slate-500">${r.totalOrders} mesas cobradas</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="font-extrabold text-[#2563eb] block">$${Number(r.totalRevenue).toLocaleString('es-AR')}</span>
+                        <span class="text-[10px] text-slate-500">Propinas: $${Number(r.totalTips).toLocaleString('es-AR')}</span>
                     </div>
                 </div>
             `).join('');
@@ -1790,74 +2107,115 @@ function renderAdminNightReport() {
     }
 }
 
-async function closeNightAndReset() {
-    if (!confirm('¿Confirmar Cierre de Noche? Se guardará el reporte y se limpiarán todas las mesas para la próxima jornada.')) return;
+function openCloseNightModal() {
+    let totalRevenue = 0;
+    paymentHistory.forEach(p => { totalRevenue += Number(p.subtotal) || 0; });
+
+    const salesEl = document.getElementById('close-modal-sales');
+    const tipsEl = document.getElementById('close-modal-tips');
+    if (salesEl) salesEl.textContent = `$${totalRevenue.toLocaleString('es-AR')}`;
+    if (tipsEl) tipsEl.textContent = `$${generalTipsPool.toLocaleString('es-AR')}`;
+
+    const modal = document.getElementById('close-night-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeNightModalCancel() {
+    const modal = document.getElementById('close-night-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function confirmNightClosure() {
+    const noteIn = document.getElementById('close-night-note');
+    const note = noteIn ? noteIn.value.trim() : '';
+
     try {
         const res = await fetch('/api/close-night', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ summary: { closedBy: currentUser } })
+            body: JSON.stringify({ summary: { closedBy: currentUser, note } })
         });
         if (res.ok) {
+            closeNightModalCancel();
             await fetchServerState(true);
-            showToast('Cierre de noche completado y mesas reiniciadas', 'success');
+            showToast('Cierre nocturno guardado y mesas reiniciadas', 'success');
         }
     } catch (e) {
-        showToast('Error al cerrar la noche', 'error');
+        showToast('Error al realizar el cierre nocturno', 'error');
     }
 }
 
 function downloadNightReportPDF() {
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-        showToast('Librería PDF no disponible', 'error');
+    const container = document.getElementById('pdf-report-container');
+    if (!container || typeof html2pdf === 'undefined') {
+        showToast('Generador PDF no disponible', 'error');
         return;
     }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Reporte de Turno - Humboldt / Rivera', 14, 18);
-    doc.setFontSize(10);
-    doc.text(`Fecha: ${new Date().toLocaleString('es-AR')}`, 14, 26);
+    html2pdf()
+        .set({
+            margin: 10,
+            filename: `Reporte_Rivera_${new Date().toISOString().slice(0, 10)}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        })
+        .from(container)
+        .save();
+}
 
+function copyNightReportText() {
+    let totalRevenue = 0;
+    paymentHistory.forEach(p => { totalRevenue += Number(p.subtotal) || 0; });
+    const text = `Resumen Rivera POS (${new Date().toLocaleDateString('es-AR')}): ${paymentHistory.length} mesas cobradas | Facturación: $${totalRevenue.toLocaleString('es-AR')} | Propinas: $${generalTipsPool.toLocaleString('es-AR')}`;
+    navigator.clipboard?.writeText(text);
+    showToast('Resumen copiado al portapapeles', 'success');
+}
+
+function downloadNightReportCSV() {
+    const headers = ['Mesa', 'Mozo', 'Metodo', 'Subtotal', 'Propina', 'Total', 'Hora'];
     const rows = paymentHistory.map(p => [
         p.table,
         p.waiter,
         p.method,
-        `$${Number(p.subtotal).toLocaleString('es-AR')}`,
-        `$${Number(p.tip).toLocaleString('es-AR')}`,
-        `$${Number(p.totalPaid).toLocaleString('es-AR')}`
+        p.subtotal,
+        p.tip,
+        p.totalPaid,
+        p.timestamp || ''
     ]);
-
-    if (doc.autoTable) {
-        doc.autoTable({
-            startY: 32,
-            head: [['Mesa', 'Mozo', 'Método', 'Subtotal', 'Propina', 'Total']],
-            body: rows
-        });
-    }
-    doc.save(`Reporte_Humboldt_${Date.now()}.pdf`);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Reporte_Rivera_${Date.now()}.csv`;
+    a.click();
 }
 
 // ============================================================================
 // GESTIÓN DE PERSONAL (MOZOS Y CONTRASEÑA ADMIN)
 // ============================================================================
 function renderAdminStaffManager() {
+    const badge = document.getElementById('staff-count-badge');
+    if (badge) badge.textContent = `${staffList.length} usuarios`;
+
     const listEl = document.getElementById('admin-staff-list');
     if (!listEl) return;
 
-    const waiters = staffList.filter(s => s.role !== 'admin');
-    listEl.innerHTML = waiters.map(w => {
+    listEl.innerHTML = staffList.map(w => {
         const safeName = w.name.replace(/'/g, "\\'");
         return `
-            <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between">
+            <div class="py-3 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold">
-                        <i class="fa-solid fa-user-tie"></i>
+                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center font-bold border border-blue-200">
+                        <i class="fa-solid fa-user-tie text-xs"></i>
                     </div>
-                    <span class="font-bold text-white text-sm">${w.name}</span>
+                    <div>
+                        <span class="font-bold text-slate-900 text-sm block">${w.name}</span>
+                        <span class="text-[11px] text-slate-500">Mozo / Salón</span>
+                    </div>
                 </div>
                 <button onclick="deleteStaffMember('${safeName}')"
-                    class="p-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs border border-red-500/30">
+                    class="p-2 rounded-xl bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 text-xs transition-all">
                     <i class="fa-solid fa-trash"></i>
                 </button>
             </div>
@@ -1866,7 +2224,7 @@ function renderAdminStaffManager() {
 }
 
 async function addNewStaffMember() {
-    const input = document.getElementById('admin-new-staff-name');
+    const input = document.getElementById('new-staff-name');
     const name = input ? input.value.trim() : '';
     if (!name) {
         showToast('Ingresa el nombre del mozo', 'error');
@@ -1890,39 +2248,27 @@ async function addNewStaffMember() {
 }
 
 async function deleteStaffMember(name) {
-    if (!confirm(`¿Eliminar a ${name} de la lista de mozos?`)) return;
-    try {
-        const res = await fetch(`/api/staff/${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (res.ok) {
-            await fetchServerState(true);
-            showToast('Mozo eliminado', 'info');
+    openConfirmModal(
+        'Eliminar Personal',
+        `¿Deseas quitar a ${name} de la lista de mozos activos?`,
+        async () => {
+            try {
+                const res = await fetch(`/api/staff/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await fetchServerState(true);
+                    showToast('Mozo eliminado', 'info');
+                }
+            } catch (e) {
+                showToast('Error al eliminar mozo', 'error');
+            }
         }
-    } catch (e) {
-        showToast('Error al eliminar mozo', 'error');
-    }
+    );
 }
 
-function openChangePasswordModal() {
-    const curr = document.getElementById('current-admin-pass-input');
-    const next = document.getElementById('new-admin-pass-input');
-    const conf = document.getElementById('confirm-admin-pass-input');
-    if (curr) curr.value = '';
-    if (next) next.value = '';
-    if (conf) conf.value = '';
-
-    const modal = document.getElementById('change-password-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeChangePasswordModal() {
-    const modal = document.getElementById('change-password-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function saveNewAdminPassword() {
-    const curr = document.getElementById('current-admin-pass-input');
-    const next = document.getElementById('new-admin-pass-input');
-    const conf = document.getElementById('confirm-admin-pass-input');
+async function updateAdminPassword() {
+    const curr = document.getElementById('change-pwd-current');
+    const next = document.getElementById('change-pwd-new');
+    const conf = document.getElementById('change-pwd-confirm');
 
     const currentPassword = curr ? curr.value : '';
     const newPassword = next ? next.value : '';
@@ -1941,7 +2287,9 @@ async function saveNewAdminPassword() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            closeChangePasswordModal();
+            if (curr) curr.value = '';
+            if (next) next.value = '';
+            if (conf) conf.value = '';
             showToast('Contraseña actualizada correctamente', 'success');
         } else {
             showToast(data.error || 'No se pudo cambiar la contraseña', 'error');
@@ -1952,22 +2300,50 @@ async function saveNewAdminPassword() {
 }
 
 // ============================================================================
-// NOTIFICACIONES TOAST UI
+// MODALES AUXILIARES Y TOASTS
 // ============================================================================
+function closeModal() {
+    const m = document.getElementById('custom-modal');
+    if (m) m.classList.add('hidden');
+}
+
+function openConfirmModal(title, message, onConfirm) {
+    const titleEl = document.getElementById('confirm-modal-title');
+    const msgEl = document.getElementById('confirm-modal-message');
+    const modal = document.getElementById('confirm-modal');
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    confirmModalCallback = onConfirm;
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeConfirmModal(confirmed) {
+    const modal = document.getElementById('confirm-modal');
+    if (modal) modal.classList.add('hidden');
+    if (confirmed && typeof confirmModalCallback === 'function') {
+        const fn = confirmModalCallback;
+        confirmModalCallback = null;
+        fn();
+    } else {
+        confirmModalCallback = null;
+    }
+}
+
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
-    const colors = {
-        success: 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200',
-        error: 'bg-red-950/95 border-red-500/60 text-red-200',
-        info: 'bg-slate-900/95 border-orange-500/50 text-slate-100'
+    const styles = {
+        success: 'bg-emerald-600 text-white border-emerald-700',
+        error: 'bg-rose-600 text-white border-rose-700',
+        info: 'bg-[#0f172a] text-white border-slate-700'
     };
 
     const toast = document.createElement('div');
-    toast.className = `px-4 py-3 rounded-xl border shadow-xl text-xs font-bold flex items-center gap-2.5 transition-all ${colors[type] || colors.info}`;
+    toast.className = `px-4 py-2.5 rounded-2xl border shadow-lg text-xs font-bold flex items-center gap-2 transition-all pointer-events-auto ${styles[type] || styles.info}`;
     toast.innerHTML = `
-        <i class="fa-solid ${type === 'success' ? 'fa-circle-check text-emerald-400' : type === 'error' ? 'fa-triangle-exclamation text-red-400' : 'fa-circle-info text-orange-400'}"></i>
+        <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-triangle-exclamation' : 'fa-circle-info'}"></i>
         <span>${message}</span>
     `;
     container.appendChild(toast);
