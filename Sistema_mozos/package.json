@@ -1,0 +1,50 @@
+{
+  "name": "sistema-gestion-mozos",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de mesas y pedidos para mozos",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis",
+    "test": "node tests/calculations.test.js && node tests/sales-report.test.js && node tests/edge-cases-and-stress.test.js"
+  },
+  "build": {
+    "appId": "com.tuempresa.gestionmozos",
+    "productName": "Sistema de Gestión para Mozos",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/logo_rivera.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sistema de Gestión para Mozos",
+      "installerIcon": "assets/logo_rivera.ico",
+      "uninstallerIcon": "assets/logo_rivera.ico",
+      "uninstallDisplayName": "Sistema de Gestión para Mozos",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "files": [
+      "**/*",
+      ".env",
+      "!dist/*",
+      "!tests/*",
+      "!scratch/*"
+    ],
+    "extraResources": [
+      ".env"
+    ]
+  },
+  "dependencies": {
+    "dotenv": "^18.0.5",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}

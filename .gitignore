@@ -1,0 +1,25 @@
+# Environment secrets & credentials
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Dependencies & Build artifacts
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.exe
+**/*.exe
+
+# Scratch & temporary files
+scratch/
+**/scratch/
+.vercel/
+**/.vercel/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión para Mozos</title>
+    <script src="tailwind.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .mapa-bg {
+            background-color: #f0f4f8;
+            background-image:
+                linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                url('Untitled.png');
+            background-size: 20px 20px, 20px 20px, contain;
+            background-repeat: repeat, repeat, no-repeat;
+            background-position: center, center, center;
+        }
+        .mesa {
+            touch-action: none; user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        .mesa:hover { box-shadow: 0 10px 15px rgba(0,0,0,0.2); transform: translateY(-2px); }
+        .resizer {
+            width: 15px; height: 15px; background: rgba(0, 0, 0, 0.3);
+            position: absolute; right: 0; bottom: 0;
+            cursor: se-resize; border-bottom-right-radius: 8px;
+        }
+        .modal-backdrop { background-color: rgba(0,0,0,0.6); }
+        
+        .decrease-bev-btn, .remove-pizza-btn {
+            width: 1.5rem; height: 1.5rem; border-radius: 9999px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 1.125rem; color: white;
+            background-color: #ef4444; /* bg-red-500 */
+        }
+        .decrease-bev-btn:hover, .remove-pizza-btn:hover {
+            background-color: #dc2626; /* bg-red-600 */
+        }
+        .order-item-food { padding: 0.25rem 0.5rem; }
+        .order-item-bev, .order-item-pizza {
+            padding: 0.25rem 0.5rem;
+            border-left-width: 4px;
+        }
+        #beverage-select option { padding: 0.5rem; font-weight: 500; }
+        .pizza-builder select {
+             background-color: #f3f4f6; border-color: #d1d5db;
+             padding: 0.5rem; border-radius: 0.5rem; width: 100%;
+        }
+           /* Alineación para input de precio por menor */
+           #menor-price-input { text-align: center; min-width: 76px; box-sizing: border-box; }
+    </style>
+    <style>
+        /* Si el usuario imprime desde la ventana principal, mostrar solo el preview del ticket */
+        @media print {
+            /* Ocultar todo por defecto */
+            body * { visibility: hidden !important; }
+            /* Mostrar solo el contenedor del preview de ticket (si existe) */
+            #print-single-preview, #print-single-preview * { visibility: visible !important; }
+            /* Posicionar el preview en la página */
+            #print-single-preview { position: absolute !important; left: 0; top: 0; width: 58mm !important; }
+        }
+    </style>
+<!-- ESTILOS SOLO PARA IMPRESIÓN (añadidos por el asistente) -->
+<style>
+/* ESTILOS SOLO PARA IMPRESIÓN */
+@media print {
+    /* 1. Configuración de la página */
+    @page {
+        margin: 0;
+        size: auto;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: white;
+        color: black !important;
+    }
+
+    /* 2. Ocultar todo lo que NO sea el ticket */
+    body * {
+        visibility: hidden !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* 3. Mostrar SOLO el ticket (soporta varias clases/usos) */
+    /* Ajusta aquí si tu contenedor tiene otra clase/ID */
+    .ticket-container, .ticket-container *,
+    #print-single-preview, #print-single-preview *,
+    .ticket, .ticket * {
+        visibility: visible !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* 4. Posicionar el ticket al inicio del papel */
+    .ticket-container, #print-single-preview, .ticket {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 5px !important;
+        color: black !important;
+        background: white !important;
+    }
+
+    /* 5. Ajustes de la imagen/logo */
+    .ticket-container img, #print-single-preview img, .ticket img {
+        max-width: 100% !important;
+        height: auto !important;
+        filter: grayscale(100%) !important;
+    }
+
+    /* Ocultar botones y elementos no imprimibles */
+    .btn, button, .no-print { display: none !important; }
+}
+</style>
+</head>
+<body class="bg-gray-200 text-gray-800">
+
+    <div class="flex flex-col md:flex-row h-screen">
+        <!-- Panel de Controles -->
+        <div class="w-full md:w-72 bg-white p-4 shadow-lg overflow-y-auto flex-shrink-0">
+            <h1 class="text-2xl font-bold text-gray-900 mb-4">Gestión del Club</h1>
+            
+            <div class="mb-4">
+                <label for="kitchen-number-input" class="block text-sm font-medium text-gray-700 mb-1">N° de Cocina (WhatsApp)</label>
+                <input type="text" id="kitchen-number-input" class="w-full p-2 border border-gray-300 rounded-lg" placeholder="Ej: 5493496123456">
+            </div>
+            
+            <hr class="my-4 border-gray-300">
+            
+            <div class="mb-4">
+                <label for="mode-switcher" class="block text-sm font-medium text-gray-700 mb-1">Modo de Operación</label>
+                <select id="mode-switcher" class="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="martes">Martes</option>
+                    <option value="miercoles">Miércoles</option>
+                    <option value="jueves">Jueves</option>
+                    <option value="viernes">Viernes</option>
+                    <option value="sabado">Sábado</option>
+                    <option value="domingo">Domingo</option>
+                </select>
+            </div>
+
+            <!-- Conteo Total de Personas (Solo visible días excepto Jueves y Viernes) -->
+            <div id="total-personas-card" class="mb-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 shadow-sm transition-all duration-300">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">👥</span>
+                        <span class="text-xs font-bold uppercase text-indigo-700 tracking-wider">Personas (Mesas)</span>
+                    </div>
+                    <span id="total-personas-count" class="text-2xl font-extrabold text-indigo-900">0</span>
+                </div>
+                <div id="total-personas-breakdown" class="text-xs text-indigo-600 mt-1 font-medium hidden"></div>
+            </div>
+            
+            <div class="space-y-3">
+                <button id="add-table-btn" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                    <span>Agregar Mesa</span>
+                </button>
+                <button id="manage-prices-btn" class="w-full bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-800 transition duration-300 flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>
+                    <span>Gestionar Precios</span>
+                </button>
+
+                <button id="show-total-btn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-300 flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" /><path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" /></svg>
+                    <span>Total Registrado</span>
+                </button>
+
+                <button id="export-pdf-btn" class="w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold py-2 px-4 rounded-lg hover:from-emerald-700 hover:to-teal-800 shadow-md hover:shadow-lg transition duration-300 flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Descargar Reporte PDF</span>
+                </button>
+
+                <button id="generic-data-btn" class="w-full bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700 transition duration-300 flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                    <span>Datos Genéricos</span>
+                </button>
+                
+                <button id="clear-all-orders-btn" class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition duration-300 flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                    <span>Limpiar Pedidos</span>
+                </button>
+            </div>
+
+            <hr class="my-6 border-gray-300">
+
+            <div id="bar-section">
+                <h2 class="text-xl font-bold mb-3 text-gray-900">Pedidos en Barra</h2>
+                <div class="flex space-x-2">
+                    <input type="text" id="bar-client-name" placeholder="Nombre del cliente" class="flex-grow p-2 border border-gray-300 rounded-lg">
+                    <button id="add-bar-order-btn" class="bg-green-600 text-white font-semibold p-2 rounded-lg hover:bg-green-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                </div>
+                <div id="bar-orders-list" class="mt-4 space-y-2"></div>
+            </div>
+        </div>
+
+        <div id="mapa-club" class="flex-1 p-4 mapa-bg relative overflow-hidden"></div>
+    </div>
+
+    <!-- Modales -->
+    <div id="order-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <div id="modal-title-container"></div>
+                <button id="close-order-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <!-- SECCIÓN PIZZA LIBRE -->
+                    <div id="pizza-libre-section" class="bg-gray-100 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">🍕 Pizza Libre</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-lg">Hombres</span>
+                                <div class="flex items-center space-x-3">
+                                    <button data-type="pizzaLibreH" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                    <span id="pizzaLibreH-count" class="text-xl font-bold w-10 text-center">0</span>
+                                    <button data-type="pizzaLibreH" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-lg">Mujeres</span>
+                                <div class="flex items-center space-x-3">
+                                    <button data-type="pizzaLibreM" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                    <span id="pizzaLibreM-count" class="text-xl font-bold w-10 text-center">0</span>
+                                    <button data-type="pizzaLibreM" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-lg font-semibold text-indigo-700">Gente (General)</span>
+                                <div class="flex items-center space-x-3">
+                                    <button data-type="pizzaLibreG" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                    <span id="pizzaLibreG-count" class="text-xl font-bold w-10 text-center">0</span>
+                                    <button data-type="pizzaLibreG" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN MENÚ -->
+                    <div id="menu-section" class="bg-gray-100 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">🍽️ Menú</h3>
+                        <div class="flex items-center justify-between mt-6">
+                            <span class="text-lg">Personas</span>
+                            <div class="flex items-center space-x-3">
+                                <button data-type="menu" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                <span id="menu-count" class="text-xl font-bold w-10 text-center">0</span>
+                                <button data-type="menu" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- SECCIÓN MENORES (Siempre Visible) -->
+                    <div id="menores-section" class="bg-gray-100 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">🧒 Menores</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-lg">Cantidad</span>
+                                <div class="flex items-center space-x-3">
+                                    <button data-type="menores" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                    <span id="menores-count" class="text-xl font-bold w-10 text-center">0</span>
+                                    <button data-type="menores" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Precio por Menor</label>
+                                <input type="number" id="menor-price-input" placeholder="$ 0.00" class="w-full p-2 border border-gray-300 rounded-lg text-center font-bold" step="0.01" min="0">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- SECCIÓN EMPANADAS -->
+                    <div id="empanadas-section" class="bg-gray-100 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">🥟 Empanadas</h3>
+                        <div class="flex items-center justify-between mt-6">
+                            <span class="text-lg">Cantidad</span>
+                            <div class="flex items-center space-x-3">
+                                <button data-type="empanadas" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                <span id="empanadas-count" class="text-xl font-bold w-10 text-center">0</span>
+                                <button data-type="empanadas" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- SECCIÓN POSTRES -->
+                    <div id="postres-section" class="bg-gray-100 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">🍰 Postres</h3>
+                        <div class="flex items-center justify-between mt-6">
+                            <span class="text-lg">Cantidad</span>
+                            <div class="flex items-center space-x-3">
+                                <button data-type="postres" data-action="decrease" class="op-btn bg-red-500 text-white rounded-full w-8 h-8 font-bold text-xl">-</button>
+                                <span id="postres-count" class="text-xl font-bold w-10 text-center">0</span>
+                                <button data-type="postres" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN CONSTRUCTOR DE PIZZAS (Solo Sábado) -->
+                <div id="custom-pizza-builder-section" class="mb-6 p-4 bg-gray-100 rounded-lg">
+                    <h3 class="font-semibold mb-3 text-lg">🍕 Armar Pizza por Gusto</h3>
+                    <div class="pizza-builder space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tamaño</label>
+                            <select id="pizza-size">
+                                <option value="entera">Entera</option>
+                                <option value="media">Media</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Gusto 1 (Entera o Mitad 1)</label>
+                            <select id="pizza-topping-1"></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Gusto 2 (Mitad 2 o Combinada en Media)</label>
+                            <select id="pizza-topping-2">
+                                <option value="ninguno">Ninguno</option>
+                            </select>
+                        </div>
+                        <div id="pizza-topping-3-container">
+                            <label class="block text-sm font-medium text-gray-700">Gusto 3 (Opcional)</label>
+                            <select id="pizza-topping-3">
+                                <option value="ninguno">Ninguno</option>
+                            </select>
+                        </div>
+                        <button id="add-custom-pizza-btn" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Agregar Pizza</button>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-2">🥤 Bebidas</h3>
+                    <div class="flex items-center space-x-2">
+                        <select id="beverage-select" class="flex-grow p-2 border border-gray-300 rounded-lg"></select>
+                        <input type="number" id="beverage-quantity" value="1" min="1" class="w-20 p-2 border rounded-lg">
+                        <button id="add-beverage-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Agregar</button>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">📝 Resumen del Pedido</h3>
+                    <div id="modal-order-list" class="bg-gray-50 p-4 rounded-lg min-h-[100px] border space-y-2"></div>
+                </div>
+            </div>
+            <div class="flex justify-between items-center p-4 border-t bg-gray-50 mt-auto">
+                <div class="flex space-x-2 flex-wrap gap-1">
+                     <button id="clean-order-btn" class="bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-emerald-700 text-sm flex items-center space-x-1 shadow-sm transition">
+                         <span id="pay-btn-icon">💳</span>
+                         <span id="pay-btn-text">Marcar Pagado</span>
+                     </button>
+                     <button id="free-paid-table-btn" class="hidden bg-teal-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-teal-700 text-sm flex items-center space-x-1 shadow-sm transition" title="Conserva la venta en el Total/Reporte y libera la mesa para nuevos clientes">
+                         <span>🔄</span>
+                         <span>Liberar Mesa</span>
+                     </button>
+                     <button id="print-single-account-btn" class="bg-purple-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-purple-700 text-sm">Imprimir</button>
+                     <button id="delete-entity-btn" class="bg-red-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-red-700 text-sm">Eliminar</button>
+                     <button id="close-and-save-btn" class="bg-green-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-green-700 text-sm">Guardar</button>
+                </div>
+                <div class="text-right whitespace-nowrap">
+                    <div>
+                        <span class="text-lg font-medium">Total:</span>
+                        <span id="modal-total-price" class="text-2xl font-bold ml-2">$0.00</span>
+                    </div>
+                    <div id="modal-tip-detail" class="text-xs font-bold text-emerald-700 mt-0.5 hidden">
+                        <span>Propina: </span><span id="modal-tip-amount">$0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="prices-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 my-8 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-2xl font-bold">Gestionar Precios</h2>
+                <button id="close-prices-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <!-- PRECIO PIZZA (SOLO JUEVES Y SÁBADO) -->
+                <div id="price-pizza-section">
+                    <div>
+                        <label class="block font-semibold mb-1">Pizza Libre (Hombres)</label>
+                        <input type="number" id="price-pizza-libre-h" class="w-full p-2 border rounded-lg">
+                    </div>
+                     <div class="mt-4">
+                        <label class="block font-semibold mb-1">Pizza Libre (Mujeres)</label>
+                        <input type="number" id="price-pizza-libre-m" class="w-full p-2 border rounded-lg">
+                    </div>
+                    <div class="mt-4">
+                        <label class="block font-semibold mb-1 text-indigo-700">Pizza Libre (General)</label>
+                        <input type="number" id="price-pizza-libre-g" class="w-full p-2 border rounded-lg">
+                    </div>
+                </div>
+                <!-- PRECIOS MENÚ (OTROS DÍAS) -->
+                <div id="price-menu-section" class="space-y-3">
+                    <h3 class="text-lg font-semibold -mb-1">Precios de Menú</h3>
+                    <div id="price-menu-miercoles-wrapper">
+                        <label class="block font-semibold mb-1">Menú Miércoles</label>
+                        <input type="number" id="price-menu-miercoles" class="w-full p-2 border rounded-lg">
+                    </div>
+                    <div id="price-menu-martes-wrapper">
+                        <label class="block font-semibold mb-1">Menú Martes</label>
+                        <input type="number" id="price-menu-martes" class="w-full p-2 border rounded-lg">
+                    </div>
+                    <div id="price-menu-viernes-wrapper">
+                        <label class="block font-semibold mb-1">Menú Viernes</label>
+                        <input type="number" id="price-menu-viernes" class="w-full p-2 border rounded-lg">
+                    </div>
+                    <div id="price-menu-domingo-wrapper">
+                        <label class="block font-semibold mb-1">Menú Domingo</label>
+                        <input type="number" id="price-menu-domingo" class="w-full p-2 border rounded-lg">
+                    </div>
+                </div>
+                <!-- PRECIOS PIZZAS POR GUSTO (SOLO SÁBADO) -->
+                <div id="price-custom-pizza-section" class="space-y-3">
+                    <h3 class="text-lg font-semibold -mb-1">Precios de Pizzas por Gusto</h3>
+                    <div class="grid grid-cols-3 gap-2 font-bold text-sm text-gray-600 mb-1">
+                        <span class="col-span-1">Gusto</span>
+                        <span class="text-center">Precio Entera</span>
+                        <span class="text-center">Precio Media</span>
+                    </div>
+                    <div id="custom-pizza-prices-list" class="space-y-2 mb-4">
+                        <!-- Los precios de las pizzas se insertarán aquí -->
+                    </div>
+                    <!-- NUEVO CAMPO PARA GUSTO DE PIZZA -->
+                    <div class="flex flex-col space-y-2 bg-gray-100 p-3 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <input type="text" id="new-pizza-name" placeholder="Nombre del Gusto" class="flex-grow p-2 border rounded-lg">
+                            <button id="add-new-pizza-btn" class="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 whitespace-nowrap">Agregar Gusto</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- PRECIO EMPANADA (SIEMPRE) -->
+                <div id="price-empanada-section">
+                    <label class="block font-semibold mb-1">Empanada (por unidad)</label>
+                    <input type="number" id="price-empanada" class="w-full p-2 border rounded-lg">
+                </div>
+                <!-- PRECIO POSTRE (SIEMPRE) -->
+                <div id="price-postre-section">
+                    <label class="block font-semibold mb-1">Postre (por unidad)</label>
+                    <input type="number" id="price-postre" class="w-full p-2 border rounded-lg">
+                </div>
+                
+                <hr>
+
+                <div>
+                    <h3 class="text-xl font-bold mb-3">Bebidas</h3>
+                    <div id="beverages-prices-list" class="space-y-2 mb-4"></div>
+                    <!-- NUEVO CAMPO PARA CATEGORÍA DE BEBIDA -->
+                    <div class="flex flex-col space-y-2 bg-gray-100 p-3 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <input type="text" id="new-beverage-name" placeholder="Nombre" class="flex-grow p-2 border rounded-lg">
+                            <input type="number" id="new-beverage-price" placeholder="Precio" class="w-28 p-2 border rounded-lg">
+                        </div>
+                        <div class="flex items-center space-x-2">
+                             <select id="new-beverage-category" class="flex-grow p-2 border border-gray-300 rounded-lg">
+                                <option value="gaseosa">Gaseosa</option>
+                                <option value="agua">Agua</option>
+                                <option value="saborizada">Agua Saborizada</option>
+                                <option value="cerveza">Cerveza</option>
+                                <option value="vino">Vino</option>
+                                <option value="jarro">Jarro/Trago</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                            <button id="add-new-beverage-price-btn" class="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700">Agregar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t bg-gray-50 mt-auto">
+                <button id="save-prices-btn" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal de Registro de Pago y Propina -->
+    <div id="payment-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 border border-gray-200">
+            <div class="flex justify-between items-center pb-3 mb-4 border-b">
+                <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <span>💰</span> <span>Registrar Pago</span>
+                </h3>
+                <button id="close-payment-modal-btn" class="text-gray-400 hover:text-gray-700 text-2xl font-bold leading-none">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Consumo Mesa</div>
+                    <div id="payment-modal-table-total" class="text-2xl font-extrabold text-gray-900 mt-0.5">$0.00</div>
+                </div>
+                <div>
+                    <label for="payment-amount-input" class="block text-xs font-bold uppercase text-gray-600 mb-1">Monto Pagado por el Cliente ($)</label>
+                    <input type="number" id="payment-amount-input" step="0.01" min="0" placeholder="0.00" class="w-full p-2.5 border-2 border-emerald-500 rounded-xl text-xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                </div>
+                <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+                    <div class="text-xs font-bold text-emerald-700 uppercase tracking-wider">Propina Calculada</div>
+                    <div id="payment-modal-calculated-tip" class="text-2xl font-extrabold text-emerald-900 mt-0.5">$0.00</div>
+                </div>
+            </div>
+            <div class="flex space-x-2 mt-6">
+                <button id="payment-unpay-btn" class="w-1/3 bg-gray-200 text-gray-700 font-semibold py-2.5 px-3 rounded-xl hover:bg-gray-300 text-xs transition">Desmarcar</button>
+                <button id="payment-confirm-btn" class="flex-1 bg-emerald-600 text-white font-bold py-2.5 px-4 rounded-xl hover:bg-emerald-700 transition">Confirmar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="password-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h2 id="password-title" class="text-xl font-bold mb-4">Verificación Requerida</h2>
+            <p id="password-description" class="mb-2">Por favor ingresa la clave de administrador.</p>
+            <input type="password" id="password-input" class="w-full p-2 border border-gray-300 rounded-lg mb-4" placeholder="Clave">
+            <p id="password-error" class="text-red-500 text-sm mb-4 hidden">Clave incorrecta.</p>
+            <div class="flex justify-end space-x-4">
+                <button id="password-cancel-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
+                <button id="password-confirm-btn" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    <div id="total-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h2 class="text-2xl font-bold mb-4 text-gray-900">Total Registrado</h2>
+            <p class="mb-4 text-gray-600">Resumen general de los pedidos y comensales en el sistema.</p>
+            <div class="bg-indigo-100 border border-indigo-200 rounded-lg p-4 mb-3">
+                <span class="block text-sm font-semibold uppercase text-indigo-800 tracking-wider">Monto Total Facturado</span>
+                <span id="total-modal-amount" class="block text-3xl font-extrabold text-indigo-900 mt-1">$0.00</span>
+            </div>
+            <div id="total-modal-propina-box" class="bg-emerald-100 border border-emerald-200 rounded-lg p-4 mb-3">
+                <span class="block text-sm font-semibold uppercase text-emerald-800 tracking-wider">Total Propina Acumulada</span>
+                <span id="total-modal-propina-count" class="block text-3xl font-extrabold text-emerald-900 mt-1">$0.00</span>
+            </div>
+            <div id="total-modal-personas-box" class="bg-purple-100 border border-purple-200 rounded-lg p-4 mb-6">
+                <span class="block text-sm font-semibold uppercase text-purple-800 tracking-wider">Total Personas en Mesas</span>
+                <span id="total-modal-personas-count" class="block text-3xl font-extrabold text-purple-900 mt-1">0</span>
+                <span id="total-modal-personas-detail" class="block text-xs text-purple-700 mt-1 font-medium"></span>
+            </div>
+            <div class="flex justify-end">
+                <button id="close-total-modal-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="print-single-account-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-2xl font-bold">Vista Previa - Ticket Individual</h2>
+                <button id="close-print-single-account-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="print-single-preview" class="bg-gray-50 p-6 rounded-lg border-2 border-gray-200"></div>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end space-x-4">
+                <button id="close-print-single-account-final-btn" class="bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700">Cerrar</button>
+                <button id="print-single-account-final-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Imprimir Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="generic-data-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 my-8 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-2xl font-bold">Datos Genéricos</h2>
+                <button id="close-generic-data-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto flex-1">
+                <div>
+                    <label class="block font-semibold mb-1">Nombre del Establecimiento</label>
+                    <input type="text" id="generic-establishment-name" class="w-full p-2 border rounded-lg" placeholder="Ej: Club Bochas">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Dirección</label>
+                    <input type="text" id="generic-address" class="w-full p-2 border rounded-lg" placeholder="Ej: Calle Principal 123">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Teléfono</label>
+                    <input type="text" id="generic-phone" class="w-full p-2 border rounded-lg" placeholder="Ej: +54 9 11 1234567">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Email</label>
+                    <input type="email" id="generic-email" class="w-full p-2 border rounded-lg" placeholder="Ej: info@club.com">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Pie de Página / Mensaje</label>
+                    <textarea id="generic-footer" class="w-full p-2 border rounded-lg" rows="3" placeholder="Ej: Gracias por su visita"></textarea>
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Alias (MercadoPago / Transf.)</label>
+                    <input type="text" id="generic-alias" class="w-full p-2 border rounded-lg" placeholder="Ej: club.bochas.mp">
+                </div>
+            </div>
+            <div class="p-4 border-t bg-gray-50">
+                <button id="save-generic-data-btn" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Guardar Datos</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación de Cambio de Día -->
+    <div id="change-day-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden border border-gray-200">
+            <div class="bg-slate-900 text-white px-6 py-4">
+                <h3 class="font-bold text-base leading-tight uppercase tracking-wider">Cambio de Día de Operación</h3>
+                <p class="text-xs text-slate-300 mt-0.5">Inicio de nueva jornada de trabajo</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <p id="change-day-message" class="text-sm text-gray-700 font-medium leading-relaxed">
+                    ¿Deseas <strong>limpiar los pedidos del día anterior</strong> para comenzar la jornada con las mesas vacías en <strong><span id="change-day-target-name"></span></strong>?
+                </p>
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700">
+                    <span>Si eliges <strong>Limpiar Pedidos</strong>, las mesas y la barra se reiniciarán a $0 para comenzar el nuevo día en limpio.</span>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row gap-2 justify-end">
+                <button id="change-day-clear-btn" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-4 rounded-lg text-xs transition shadow-sm">
+                    Limpiar Pedidos Anteriores
+                </button>
+                <button id="change-day-keep-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg text-xs transition">
+                    Mantener Pedidos
+                </button>
+                <button id="change-day-cancel-btn" class="text-gray-500 hover:text-gray-700 text-xs px-2 py-2">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Reporte de Ventas y Exportación PDF -->
+    <div id="sales-report-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-100 rounded-xl shadow-2xl w-full max-w-5xl mx-4 my-6 max-h-[92vh] flex flex-col overflow-hidden">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center px-6 py-4 bg-white border-b border-gray-200">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 uppercase tracking-wide">Reporte Consolidado de Ventas</h2>
+                    <p class="text-xs text-gray-500">Métricas completas, productos vendidos, gráficos y análisis de rotación</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="download-pdf-btn" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center space-x-2 text-xs">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        <span>Descargar PDF</span>
+                    </button>
+                    <button id="close-sales-report-modal-btn" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 text-2xl font-bold leading-none">&times;</button>
+                </div>
+            </div>
+            
+            <!-- Modal Body (Dashboard Container) -->
+            <div id="sales-report-content" class="p-6 overflow-y-auto flex-1 bg-gray-50">
+                <!-- Se inyecta dinámicamente con SalesReportManager.renderModalDashboard(report) -->
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 bg-white border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+                <span>Presione <strong>Descargar PDF</strong> para guardar el archivo en su computadora.</span>
+                <button id="close-sales-report-final-btn" class="bg-gray-200 text-gray-800 font-semibold py-1.5 px-4 rounded-lg hover:bg-gray-300 transition">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+
+<script src="js/calculations.js"></script>
+<script src="js/sales-report.js"></script>
+<script src="js/state.js"></script>
+<script src="js/drag.js"></script>
+<script src="js/app.js"></script>
+
+
+</body>
+</html>

@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rivera POS - Toma de Comandas y Gestión</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf.js para exportación a PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Regla crítica para celulares (Anti-Zoom iOS/Android): font-size: 16px !important */
+        input,
+        select,
+        textarea {
+            font-size: 16px !important;
+        }
+
+        /* Scrollbars sutiles */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f8fafc;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+
+        /* Ocultar barra de scroll en elementos táctiles deslizables */
+        .scrollbar-none::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+        .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Estilos exclusivos para impresión de comanda térmica (80mm) */
+        @media print {
+            body * {
+                visibility: hidden !important;
+            }
+
+            #printable-ticket-area,
+            #printable-ticket-area * {
+                visibility: visible !important;
+            }
+
+            #printable-ticket-area {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 80mm !important;
+                padding: 4mm !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="h-full flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
+
+    <!-- CONTENEDOR DE TOASTS NO BLOQUEANTES (NOTIFICACIONES DINÁMICAS RÁPIDAS) -->
+    <div id="toast-container"
+        class="fixed top-4 inset-x-0 flex flex-col items-center pointer-events-none z-50 space-y-2 px-4"></div>
+
+    <div id="app-container" class="flex-1 flex flex-col h-full overflow-hidden relative">
+
+        <!-- ================= PANTALLA DE INGRESO RÁPIDO / SELECCIÓN DE USUARIO ================= -->
+        <div id="login-view" class="absolute inset-0 bg-[#0f172a] z-50 flex flex-col items-center justify-center p-4">
+            <div
+                class="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+                <!-- Escudo / Icono del Club en Azul y Blanco -->
+                <div
+                    class="w-16 h-16 bg-[#2563eb] rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/25 text-white text-2xl font-bold border-2 border-white">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Rivera POS</h1>
+                    <p class="text-xs text-slate-500 mt-1">Selecciona tu usuario para tomar comandas o administrar el
+                        salón</p>
+                </div>
+
+                <div class="space-y-3 text-left">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Personal de
+                            Turno</label>
+                        <span id="db-connection-pill"
+                            class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Conectando...
+                        </span>
+                    </div>
+                    <div id="staff-selection-list" class="space-y-2">
+                        <!-- Botones dinámicos de mozos -->
+                    </div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                    <span>Sincronizado con Sistema Mozos y Pedidos</span>
+                    <button onclick="openAdminDirect()"
+                        class="text-[#2563eb] hover:text-blue-700 hover:underline font-semibold flex items-center gap-1">
+                        <span>Panel Admin</span>
+                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= BARRA SUPERIOR (HEADER) ================= -->
+        <header id="main-header"
+            class="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 flex justify-between items-center shrink-0 z-20 shadow-sm hidden">
+            <div class="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
+                <div
+                    class="bg-[#2563eb] w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-white font-bold shadow-md shadow-blue-500/20 flex items-center justify-center border border-blue-400 shrink-0">
+                    <i class="fa-solid fa-shield-halved text-xs sm:text-sm"></i>
+                </div>
+                <div class="min-w-0">
+                    <h2 class="font-bold text-xs sm:text-sm tracking-tight text-slate-900 flex items-center gap-1 sm:gap-1.5 truncate">
+                        <span id="header-user-name" class="truncate max-w-[90px] xs:max-w-[140px] sm:max-w-none">Mozo</span>
+                        <span
+                            class="text-[9px] sm:text-[10px] bg-blue-50 text-[#2563eb] px-1.5 sm:px-2 py-0.5 rounded-full border border-blue-200 font-semibold shrink-0"
+                            id="header-role-badge">Mozo</span>
+                        <span id="header-live-dot" class="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shrink-0"
+                            title="Sincronización en vivo activa"></span>
+                    </h2>
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate" id="header-tips-summary">Caja Propinas: $0</p>
+                </div>
+            </div>
+
+            <!-- Botonera de Navegación Rápida -->
+            <div class="flex items-center space-x-1 sm:space-x-2 shrink-0">
+                <!-- Botón para Admin: Ir a Panel Admin -->
+                <button id="header-admin-nav-btn" onclick="switchToAdminWorkspace()"
+                    class="hidden bg-[#2563eb] hover:bg-blue-600 text-white border border-blue-400 px-2 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1 shadow-sm transition-all cursor-pointer active:scale-95"
+                    title="Ir al Panel de Administración">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span class="hidden xs:inline">Admin</span>
+                </button>
+
+                <!-- Botón para Admin: Ver Salón / Mesas (cuando está en el panel admin) -->
+                <button id="header-salon-nav-btn" onclick="switchToWaiterTables()"
+                    class="hidden bg-blue-50 hover:bg-blue-100 text-[#2563eb] border border-blue-200 px-2 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1 shadow-sm transition-all cursor-pointer active:scale-95"
+                    title="Ver Salón y Mesas">
+                    <i class="fa-solid fa-table-cells-large"></i>
+                    <span class="hidden xs:inline">Mesas</span>
+                </button>
+
+                <!-- Registro de Pagos -->
+                <button onclick="openPaymentHistoryModal()"
+                    class="bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#2563eb] border border-slate-200 px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1 shadow-sm transition-all active:scale-95"
+                    title="Registro de Pagos">
+                    <i class="fa-solid fa-clipboard-list text-[#2563eb]"></i>
+                    <span class="hidden sm:inline">Pagos</span>
+                    <span id="header-payments-count"
+                        class="bg-blue-100 text-[#2563eb] text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+                </button>
+
+                <!-- Caja de Propinas General -->
+                <button onclick="openTipsModal()"
+                    class="bg-slate-50 hover:bg-blue-50 text-[#2563eb] border border-slate-200 px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1 shadow-sm transition-all active:scale-95"
+                    title="Caja General de Propinas">
+                    <i class="fa-solid fa-wallet"></i>
+                    <span class="hidden md:inline">Propinas</span>
+                </button>
+
+                <!-- Salir / Cambiar Usuario -->
+                <button onclick="logoutStaff()"
+                    class="bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 p-1.5 sm:p-2 rounded-xl text-xs transition-all active:scale-95"
+                    title="Cambiar Usuario">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- ================= ESPACIO DEL MOZO (VISTA A: MAPA DE SALÓN Y MESAS) ================= -->
+        <div id="waiter-tables-view" class="flex-1 flex flex-col bg-slate-50 overflow-y-auto p-4 sm:p-6 hidden">
+            <div class="max-w-4xl mx-auto w-full space-y-5">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-bold text-slate-900">Salón y Mesas</h2>
+                        <p class="text-xs text-slate-500">Toca una mesa para cargar comandas o cobrar la cuenta</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Botón Panel Admin para el Encargado -->
+                        <button id="salon-back-admin-btn" onclick="switchToAdminWorkspace()"
+                            class="hidden bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer">
+                            <i class="fa-solid fa-sliders text-blue-400"></i>
+                            <span>Panel Admin</span>
+                        </button>
+
+                        <div
+                            class="flex flex-wrap items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 shadow-sm">
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> Libre</span>
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-[#2563eb]"></span> Ocupada</span>
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Sin enviar</span>
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Pagada</span>
+                        </div>
+                        <button onclick="openAddTableModal()"
+                            class="bg-[#2563eb] hover:bg-blue-600 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer">
+                            <i class="fa-solid fa-plus text-[10px]"></i>
+                            <span>Agregar Mesa</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tables-grid-cards" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <!-- Tarjetas dinámicas de mesas -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= ESPACIO DEL MOZO (VISTA B: TOMA DE PEDIDO DENTRO DE LA MESA) ================= -->
+        <div id="waiter-order-view" class="flex-1 flex flex-col md:flex-row overflow-hidden relative hidden">
+
+            <!-- Panel Izquierdo: Catálogo, Buscador y Botón Volver -->
+            <div class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 pb-16 md:pb-0">
+
+                <!-- Encabezado de la Mesa -->
+                <div
+                    class="bg-white px-3 py-2.5 border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
+                    <div class="flex items-center space-x-2">
+                        <button onclick="backToTablesView()"
+                            class="bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Volver a Mesas</span>
+                        </button>
+                        <!-- Botón directo para que el admin regrese a Panel Admin -->
+                        <button id="order-back-admin-btn" onclick="switchToAdminWorkspace()"
+                            class="hidden bg-blue-50 hover:bg-blue-100 text-[#2563eb] border border-blue-200 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer">
+                            <i class="fa-solid fa-sliders"></i>
+                            <span>Panel Admin</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span id="active-table-indicator"
+                            class="font-bold text-xs sm:text-sm text-[#2563eb] bg-blue-50 px-3 py-1 rounded-xl border border-blue-200">Mesa
+                            01</span>
+                    </div>
+                </div>
+
+                <!-- Cartel de Alerta: Comanda Sin Enviar en esta Mesa -->
+                <div id="table-unsent-alert-banner" class="hidden"></div>
+
+                <!-- Buscador Instantáneo (oninput) para agilizar pedidos en celular -->
+                <div class="bg-white px-3 py-2 border-b border-slate-100 shrink-0">
+                    <div class="relative flex items-center">
+                        <span
+                            class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                        </span>
+                        <input type="text" id="menu-search-input" oninput="filterMenuItems()"
+                            placeholder="Buscar pizza, milanesa, bebida..."
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#2563eb] transition-all">
+                        <button id="clear-search-btn" onclick="clearSearchInput()"
+                            class="hidden absolute right-2.5 text-slate-400 hover:text-slate-600">
+                            <i class="fa-solid fa-circle-xmark text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pestañas Horizontales Deslizables de Categorías -->
+                <div class="bg-white px-2.5 py-2 border-b border-slate-200 flex space-x-2 overflow-x-auto shrink-0"
+                    id="category-tabs">
+                    <!-- Generadas dinámicamente -->
+                </div>
+
+                <!-- Grilla de Platos y Bebidas -->
+                <div class="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50">
+                    <!-- Barra de 3 Botones para Pizzas (1 gusto, 2 gustos, 3 gustos) -->
+                    <div id="pizza-modes-bar" class="mb-3 hidden"></div>
+                    <!-- Banner de Pizza Libre Activa y Rondas -->
+                    <div id="pizza-libre-active-banner" class="mb-3 hidden"></div>
+                    <div id="menu-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                        <!-- Generados dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Derecho / Bottom Drawer Desplegable para Móvil -->
+            <div id="order-drawer"
+                class="fixed md:static bottom-0 inset-x-0 md:w-96 bg-white border-t md:border-t-0 md:border-l border-slate-200 flex flex-col shadow-2xl md:shadow-none transition-all duration-300 z-30 rounded-t-3xl md:rounded-none">
+
+                <!-- Barra Handler Móvil (Tocar para desplegar o colapsar) -->
+                <div onclick="toggleOrderDrawer()"
+                    class="md:hidden bg-[#0f172a] text-white px-4 py-3 rounded-t-2xl flex justify-between items-center cursor-pointer shadow-lg">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-7 h-7 rounded-lg bg-[#2563eb] flex items-center justify-center text-xs">
+                            <i class="fa-solid fa-receipt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-xs" id="drawer-title-mobile">Ver Comanda (0 ítems)</h3>
+                            <span class="text-[10px] text-slate-300 block">Toca para desplegar o cerrar comanda</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2.5">
+                        <span id="drawer-total-preview" class="font-bold text-sm text-blue-400">$0</span>
+                        <div class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center">
+                            <i id="drawer-chevron"
+                                class="fa-solid fa-chevron-up text-xs text-white transition-transform duration-200"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Encabezado de Comanda (Desktop) -->
+                <div
+                    class="hidden md:flex p-3.5 bg-slate-50 border-b border-slate-200 justify-between items-center shrink-0">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-receipt text-[#2563eb]"></i>
+                        <h3 class="font-bold text-sm text-slate-800" id="current-order-title">Pedido Mesa 01</h3>
+                    </div>
+                    <span id="item-count-badge"
+                        class="bg-blue-50 text-[#2563eb] border border-blue-200 text-xs px-2 py-0.5 rounded-full font-medium">0
+                        ítems</span>
+                </div>
+
+                <!-- Lista de Ítems de la Comanda -->
+                <div id="order-drawer-content"
+                    class="hidden md:flex flex-col flex-1 overflow-hidden max-h-[65vh] md:max-h-none">
+                    <div id="order-items-list"
+                        class="flex-1 overflow-y-auto p-3 space-y-2 divide-y divide-slate-100 max-h-56 md:max-h-none">
+                        <!-- Ítems dinámicos -->
+                    </div>
+
+                    <!-- Notas de Cocina y Resumen Total -->
+                    <div class="p-3.5 bg-white border-t border-slate-200 space-y-3 shrink-0">
+                        <div>
+                            <input type="text" id="order-note" oninput="saveCurrentNote(this.value)"
+                                placeholder="Notas de cocina (ej: sin cebolla, bien cocida)..."
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#2563eb] transition-all">
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <div>
+                                <span class="text-[10px] text-slate-500 uppercase font-semibold block">Total Mesa</span>
+                                <span id="order-total-price" class="text-lg font-bold text-slate-900">$0</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="openPaymentByTable(currentTable)" id="pay-table-btn" disabled
+                                    class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed">
+                                    <i class="fa-solid fa-cash-register"></i>
+                                    <span>Cobrar</span>
+                                </button>
+                                <button onclick="sendOrderToKitchen()" id="send-order-btn" disabled
+                                    class="bg-[#2563eb] hover:bg-blue-600 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md shadow-blue-500/20 transition-all flex items-center space-x-1.5 cursor-pointer disabled:cursor-not-allowed">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                    <span>Enviar Cocina</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= PANEL DE ADMINISTRACIÓN (3 PESTAÑAS) ================= -->
+        <div id="admin-workspace" class="flex-1 bg-slate-50 flex flex-col hidden overflow-hidden">
+            <div class="bg-white px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 shrink-0 shadow-sm space-y-2.5">
+                <!-- Fila 1: Título y Botón Ver Salón -->
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center space-x-2.5 min-w-0">
+                        <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#2563eb] text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+                            <i class="fa-solid fa-sliders text-sm sm:text-base"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-xs sm:text-sm md:text-base text-slate-900 truncate">Panel de Administración</h2>
+                            <p class="text-[10px] sm:text-[11px] text-slate-500 truncate hidden xs:block">Lista de precios sincronizada con Sistema Mozos, personal y reportes</p>
+                        </div>
+                    </div>
+
+                    <button onclick="switchToWaiterTables()"
+                        class="bg-blue-50 hover:bg-blue-100 text-[#2563eb] text-xs px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-blue-200 transition-all flex items-center space-x-1.5 font-bold shrink-0 shadow-sm active:scale-95">
+                        <i class="fa-solid fa-table-cells-large"></i>
+                        <span>Ver Salón</span>
+                    </button>
+                </div>
+
+                <!-- Fila 2: 3 Pestañas Horizontales Deslizables -->
+                <div class="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 overflow-x-auto w-full scrollbar-none gap-1">
+                    <button onclick="switchAdminTab('menu')" id="admin-tab-menu"
+                        class="flex-1 min-w-fit px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#2563eb] shadow-sm transition-all flex items-center justify-center space-x-1.5 whitespace-nowrap active:scale-95">
+                        <i class="fa-solid fa-book-open"></i>
+                        <span>Carta / Precios</span>
+                    </button>
+                    <button onclick="switchAdminTab('report')" id="admin-tab-report"
+                        class="flex-1 min-w-fit px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all flex items-center justify-center space-x-1.5 whitespace-nowrap active:scale-95">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>Reporte</span>
+                    </button>
+                    <button onclick="switchAdminTab('staff')" id="admin-tab-staff"
+                        class="flex-1 min-w-fit px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all flex items-center justify-center space-x-1.5 whitespace-nowrap active:scale-95">
+                        <i class="fa-solid fa-users-gear"></i>
+                        <span>Personal</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PESTAÑA 1: Carta / Menú (Sincronizada con Precios de Sistema_mozos) -->
+            <div id="admin-subview-menu" class="flex-1 overflow-y-auto p-3 sm:p-6">
+                <div class="max-w-5xl mx-auto space-y-4 sm:space-y-6">
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+                        <!-- Formulario para Crear Categoría -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 h-fit">
+                            <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
+                                <div
+                                    class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200 shrink-0">
+                                    <i class="fa-solid fa-folder-plus text-sm"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="font-bold text-sm text-slate-900 truncate">Crear Categoría</h3>
+                                    <p class="text-[11px] text-slate-500 truncate">Ej: Postres, Promociones, Cafetería</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1">Nombre de la Categoría</label>
+                                    <input type="text" id="new-cat-name" placeholder="Ej: Postres Caseros"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1">Ícono Vectorial FontAwesome</label>
+                                    <select id="new-cat-icon"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                        <option value="fa-pizza-slice">Pizza / Masas (fa-pizza-slice)</option>
+                                        <option value="fa-burger">Hamburguesas / Sándwiches (fa-burger)</option>
+                                        <option value="fa-utensils">Platos / Minutas (fa-utensils)</option>
+                                        <option value="fa-wine-glass">Bebidas / Cervezas (fa-wine-glass)</option>
+                                        <option value="fa-ice-cream">Postres / Helados (fa-ice-cream)</option>
+                                        <option value="fa-mug-hot">Cafetería (fa-mug-hot)</option>
+                                        <option value="fa-fire">Parrilla / Especiales (fa-fire)</option>
+                                        <option value="fa-star">Promociones (fa-star)</option>
+                                    </select>
+                                </div>
+                                <button onclick="createNewCategory()"
+                                    class="w-full bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-md shadow-blue-500/20 transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Guardar Categoría</span>
+                                </button>
+                            </div>
+
+                            <!-- Lista de Categorías Existentes -->
+                            <div class="pt-3 border-t border-slate-100 space-y-2">
+                                <span class="text-[11px] font-bold text-slate-500 uppercase block">Categorías Activas</span>
+                                <div id="admin-categories-list" class="space-y-1.5">
+                                    <!-- Dinámicas -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Formulario para Agregar Plato o Bebida -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm lg:col-span-2 space-y-3.5">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                                <div class="flex items-center space-x-2.5 min-w-0">
+                                    <div
+                                        class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 shrink-0">
+                                        <i class="fa-solid fa-utensils text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-sm sm:text-base text-slate-900 truncate">Agregar Plato o Bebida</h3>
+                                        <p class="text-[11px] text-slate-500 truncate">Se actualiza en tiempo real en los celulares</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                                <div>
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1">Categoría Destino</label>
+                                    <select id="new-item-cat"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                        <!-- Opciones dinámicas -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1">Nombre del Producto</label>
+                                    <input type="text" id="new-item-name" placeholder="Ej: Milanesa Napolitana XXL"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1">Precio ($)</label>
+                                    <input type="number" inputmode="numeric" id="new-item-price" placeholder="Ej: 8500"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base font-bold text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1">Descripción / Ingredientes (Opcional)</label>
+                                    <input type="text" id="new-item-desc"
+                                        placeholder="Ej: Salsa fileto, jamón natural y queso gratinado con papas fritas"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                </div>
+                                <div class="flex items-end">
+                                    <button onclick="addNewMenuItem()"
+                                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                                        <i class="fa-solid fa-plus"></i>
+                                        <span>Agregar al Menú</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Catálogo Completo Agrupado -->
+                            <div class="pt-4 border-t border-slate-100 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="font-bold text-xs uppercase tracking-wider text-slate-500">Productos Cargados</h4>
+                                    <span id="admin-total-products-badge"
+                                        class="text-xs font-bold text-[#2563eb] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">0 ítems</span>
+                                </div>
+                                <div id="admin-menu-items-list" class="space-y-4 max-h-[360px] sm:max-h-[420px] overflow-y-auto pr-1">
+                                    <!-- Catálogo -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- PESTAÑA 3: Reporte de la Noche y Descarga en PDF -->
+            <div id="admin-subview-report" class="flex-1 overflow-y-auto p-3 sm:p-6 hidden">
+                <div class="max-w-5xl mx-auto space-y-4 sm:space-y-6">
+
+                    <!-- Barra de Acciones del Reporte -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                        <div class="min-w-0">
+                            <span
+                                class="text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-[#2563eb] px-2.5 py-0.5 rounded-full border border-blue-200">Turno en Vivo</span>
+                            <h3 class="text-base sm:text-lg font-bold text-slate-900 mt-1 truncate" id="report-current-date">Resumen Nocturno</h3>
+                            <p class="text-xs text-slate-500">KPIs de ventas, ranking de salida y propinas</p>
+                        </div>
+                        <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto shrink-0">
+                            <button onclick="downloadNightReportPDF()"
+                                class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-2.5 rounded-xl text-xs transition-all shadow-md shadow-rose-500/20 flex items-center justify-center space-x-1.5 active:scale-95">
+                                <i class="fa-solid fa-file-pdf"></i>
+                                <span>Descargar PDF</span>
+                            </button>
+                            <button onclick="copyNightReportText()"
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2.5 rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                                <i class="fa-solid fa-copy"></i>
+                                <span>Copiar Resumen</span>
+                            </button>
+                            <button onclick="downloadNightReportCSV()"
+                                class="bg-blue-50 hover:bg-blue-100 text-[#2563eb] border border-blue-200 font-bold px-3 py-2.5 rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                                <i class="fa-solid fa-file-csv"></i>
+                                <span>CSV</span>
+                            </button>
+                            <button onclick="openCloseNightModal()"
+                                class="col-span-2 sm:col-span-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1.5 active:scale-95">
+                                <i class="fa-solid fa-box-archive"></i>
+                                <span>Cierre Nocturno</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Contenedor Exportable a PDF A4 -->
+                    <div id="pdf-report-container" class="space-y-4 sm:space-y-5 bg-slate-50 p-1 rounded-2xl">
+                        <!-- 5 Tarjetas KPI -->
+                        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                            <div class="bg-white border border-slate-200 p-3 sm:p-4 rounded-2xl shadow-sm min-w-0">
+                                <span class="text-[10px] sm:text-[11px] text-slate-500 font-semibold block truncate">Facturación Total</span>
+                                <span id="rep-kpi-total" class="text-base sm:text-xl font-bold text-slate-900 mt-0.5 sm:mt-1 block truncate">$0</span>
+                                <span id="rep-kpi-orders" class="text-[10px] text-slate-400 block truncate">0 mesas cobradas</span>
+                            </div>
+                            <div class="bg-white border border-emerald-200 p-3 sm:p-4 rounded-2xl shadow-sm min-w-0">
+                                <span class="text-[10px] sm:text-[11px] text-emerald-700 font-semibold block truncate">Efectivo en Caja</span>
+                                <span id="rep-kpi-cash" class="text-base sm:text-xl font-bold text-emerald-600 mt-0.5 sm:mt-1 block truncate">$0</span>
+                                <span class="text-[10px] text-slate-400 block truncate">Pagos en billete</span>
+                            </div>
+                            <div class="bg-white border border-indigo-200 p-3 sm:p-4 rounded-2xl shadow-sm min-w-0">
+                                <span class="text-[10px] sm:text-[11px] text-indigo-700 font-semibold block truncate">Transferencias</span>
+                                <span id="rep-kpi-transfer" class="text-base sm:text-xl font-bold text-indigo-600 mt-0.5 sm:mt-1 block truncate">$0</span>
+                                <span class="text-[10px] text-slate-400 block truncate">Pagos digitales</span>
+                            </div>
+                            <div class="bg-white border border-blue-200 p-3 sm:p-4 rounded-2xl shadow-sm min-w-0">
+                                <span class="text-[10px] sm:text-[11px] text-[#2563eb] font-semibold block truncate">Pozo de Propinas</span>
+                                <span id="rep-kpi-tips" class="text-base sm:text-xl font-bold text-[#2563eb] mt-0.5 sm:mt-1 block truncate">$0</span>
+                                <span id="rep-kpi-tip-split" class="text-[10px] text-slate-500 font-medium block truncate">$0 por mozo</span>
+                            </div>
+                            <div class="bg-white border border-slate-200 p-3 sm:p-4 rounded-2xl shadow-sm col-span-2 lg:col-span-1 min-w-0">
+                                <span class="text-[10px] sm:text-[11px] text-slate-500 font-semibold block truncate">Ticket Promedio</span>
+                                <span id="rep-kpi-avg" class="text-base sm:text-xl font-bold text-slate-900 mt-0.5 sm:mt-1 block truncate">$0</span>
+                                <span class="text-[10px] text-slate-400 block truncate">Promedio por mesa</span>
+                            </div>
+                        </div>
+
+                        <!-- Ranking de Lo Más Vendido + Rendimiento por Mozo -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                            <!-- Ranking Productos Más Vendidos -->
+                            <div class="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                                    <div class="min-w-0">
+                                        <h4 class="font-bold text-sm text-slate-900 truncate">Ranking: Más Vendido del Día</h4>
+                                        <p class="text-[11px] text-slate-500 truncate">Platos y bebidas con mayor salida</p>
+                                    </div>
+                                    <span
+                                        class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 font-bold shrink-0">
+                                        <i class="fa-solid fa-trophy text-xs"></i>
+                                    </span>
+                                </div>
+                                <div id="rep-top-products-list" class="space-y-2 flex-1 max-h-72 overflow-y-auto pr-1">
+                                    <!-- Lista de más vendidos -->
+                                </div>
+                            </div>
+
+                            <!-- Rendimiento por Mozo -->
+                            <div class="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                                    <div class="min-w-0">
+                                        <h4 class="font-bold text-sm text-slate-900 truncate">Rendimiento por Mozo</h4>
+                                        <p class="text-[11px] text-slate-500 truncate">Mesas cerradas y propinas generadas</p>
+                                    </div>
+                                    <span
+                                        class="w-8 h-8 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200 shrink-0">
+                                        <i class="fa-solid fa-user-check text-xs"></i>
+                                    </span>
+                                </div>
+                                <div id="rep-waiter-breakdown" class="space-y-2.5 flex-1 max-h-72 overflow-y-auto pr-1">
+                                    <!-- Estadísticas por mozo -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Detalle Completo de Todas las Mesas de la Noche -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-sm text-slate-900 truncate">Registro de Todas las Mesas</h4>
+                                    <p class="text-[11px] text-slate-500 truncate">Cobros, método de pago y consumiciones</p>
+                                </div>
+                                <span id="rep-tickets-badge"
+                                    class="bg-blue-50 text-[#2563eb] text-xs font-bold px-2.5 py-0.5 rounded-full border border-blue-200 shrink-0">0 cobros</span>
+                            </div>
+                            <div id="rep-payments-table"
+                                class="space-y-2 max-h-96 overflow-y-auto divide-y divide-slate-100 pr-1">
+                                <!-- Filas de cobros -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Archivo de Cierres Nocturnos Guardados -->
+                    <div class="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-sm">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <div
+                                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-sm text-slate-900 truncate">Archivo de Cierres Nocturnos</h4>
+                                    <p class="text-[11px] text-slate-500 truncate">Historial de turnos archivados en Neon DB</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="saved-nights-archive-list" class="space-y-3">
+                            <!-- Reportes archivados -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- PESTAÑA 4: Mozos / Personal -->
+            <div id="admin-subview-staff" class="flex-1 overflow-y-auto p-3 sm:p-6 hidden">
+                <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
+
+                    <!-- Formulario de Alta de Personal -->
+                    <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                        <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
+                            <div
+                                class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200 shrink-0">
+                                <i class="fa-solid fa-user-plus text-sm"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h3 class="font-bold text-sm sm:text-base text-slate-900 truncate">Agregar Mozo o Personal</h3>
+                                <p class="text-[11px] text-slate-500 truncate">Aparece de inmediato en todos los celulares</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Nombre y Apellido</label>
+                                <input type="text" id="new-staff-name" placeholder="Ej: Valentina Torres"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Rol</label>
+                                <select id="new-staff-role"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                                    <option value="Mozo">Mozo / Salón</option>
+                                    <option value="Cocina / Admin">Cocina / Admin</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-1">
+                            <button onclick="addNewStaffMember()"
+                                class="w-full sm:w-auto bg-[#2563eb] hover:bg-blue-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs shadow-md shadow-blue-500/20 transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Agregar al Equipo</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Personal Activo -->
+                    <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div class="min-w-0">
+                                <h3 class="font-bold text-sm sm:text-base text-slate-900 truncate">Personal Activo del Turno</h3>
+                                <p class="text-[11px] text-slate-500 truncate">Seguimiento de mesas cobradas y roles</p>
+                            </div>
+                            <span id="staff-count-badge"
+                                class="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">0 usuarios</span>
+                        </div>
+
+                        <div id="admin-staff-list" class="divide-y divide-slate-100">
+                            <!-- Personal dinámico -->
+                        </div>
+                    </div>
+
+                    <!-- Seguridad y Cambio de Contraseña de Acceso Admin -->
+                    <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+                        <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
+                            <div
+                                class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200 shrink-0">
+                                <i class="fa-solid fa-key text-sm"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h3 class="font-bold text-sm sm:text-base text-slate-900 truncate">Seguridad y Clave de Acceso</h3>
+                                <p class="text-[11px] text-slate-500 truncate">Modifica la clave de ingreso al panel de administración.</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Contraseña Actual</label>
+                                <input type="password" inputmode="numeric" id="change-pwd-current"
+                                    placeholder="Clave actual"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Nueva Contraseña</label>
+                                <input type="password" inputmode="numeric" id="change-pwd-new"
+                                    placeholder="Mínimo 4 caracteres"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Confirmar Nueva Contraseña</label>
+                                <input type="password" inputmode="numeric" id="change-pwd-confirm"
+                                    placeholder="Repite la nueva clave"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-1">
+                            <button onclick="updateAdminPassword()"
+                                class="w-full sm:w-auto bg-[#2563eb] hover:bg-blue-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs shadow-md shadow-blue-500/20 transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                                <i class="fa-solid fa-lock"></i>
+                                <span>Actualizar Contraseña</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ================= MODAL: INGRESO CONTRASEÑA ADMIN / ENCARGADO ================= -->
+    <div id="admin-auth-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div
+                class="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563eb] flex items-center justify-center mx-auto text-xl border border-blue-200 shadow-sm">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-base text-slate-900">Acceso Encargado / Admin</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Ingresa tu contraseña para entrar al panel</p>
+            </div>
+
+            <div class="space-y-2 text-left">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                        <i class="fa-solid fa-lock text-xs"></i>
+                    </span>
+                    <input type="password" inputmode="numeric" id="admin-auth-input" placeholder="Contraseña "
+                        onkeydown="if(event.key === 'Enter') submitAdminAuth()"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-base font-bold text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                </div>
+                <p id="admin-auth-error" class="hidden text-[11px] text-rose-600 font-semibold"></p>
+            </div>
+
+            <div class="flex space-x-2 pt-1">
+                <button onclick="closeAdminAuthModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button onclick="submitAdminAuth()" id="admin-auth-submit-btn"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-1.5">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    <span>Ingresar</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: AGREGAR NUEVA MESA ================= -->
+    <div id="add-table-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center space-x-3 border-b border-slate-100 pb-3">
+                <div
+                    class="w-10 h-10 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200">
+                    <i class="fa-solid fa-table-cells-large"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-base text-slate-900">Agregar Nueva Mesa</h3>
+                    <p class="text-[11px] text-slate-500">Se incorporará de inmediato al mapa del salón</p>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs font-semibold text-slate-700 block mb-1">Nombre o Número de Mesa</label>
+                <input type="text" id="new-table-name-input" placeholder="Ej: Mesa 07, Patio 01, Terraza..."
+                    onkeydown="if(event.key === 'Enter') submitAddNewTable()"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+            </div>
+
+            <div class="flex space-x-2 pt-1">
+                <button onclick="closeAddTableModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button onclick="submitAddNewTable()"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-1.5">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Crear Mesa</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: CIERRE DE NOCHE ================= -->
+    <div id="close-night-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center space-x-3 border-b border-slate-100 pb-3">
+                <div
+                    class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                    <i class="fa-solid fa-box-archive"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-base text-slate-900">Guardar Cierre de la Noche</h3>
+                    <p class="text-[11px] text-slate-500">Se archivará el turno completo en la base de datos</p>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Total Ventas del Turno:</span>
+                    <strong id="close-modal-sales" class="text-slate-900">$0</strong>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Caja de Propinas a Repartir:</span>
+                    <strong id="close-modal-tips" class="text-[#2563eb]">$0</strong>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs font-semibold text-slate-700 block mb-1">Nota u observación del turno
+                    (opcional)</label>
+                <input type="text" id="close-night-note" placeholder="Ej: Turno noche concurrido sin novedades..."
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base text-slate-900 focus:outline-none focus:border-[#2563eb]">
+            </div>
+
+            <label
+                class="flex items-center space-x-2.5 text-xs text-slate-700 bg-blue-50/60 p-3 rounded-xl border border-blue-100 cursor-pointer">
+                <input type="checkbox" id="reset-after-close-checkbox" checked class="w-4 h-4 accent-[#2563eb] rounded">
+                <span>Reiniciar contadores de caja y propinas a $0 para el próximo turno luego de guardar</span>
+            </label>
+
+            <div class="flex space-x-2 pt-2">
+                <button onclick="closeNightModalCancel()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button onclick="confirmNightClosure()"
+                    class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20">
+                    Confirmar y Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: CHECKOUT DE COBRO Y PROPINA A VOLUNTAD ================= -->
+    <div id="payment-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div
+            class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <div
+                        class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                        <i class="fa-solid fa-cash-register text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-slate-900">Cobrar y Marcar Pagado</h3>
+                        <p class="text-[11px] text-slate-500 font-medium" id="pay-modal-subtitle">Mesa 01</p>
+                    </div>
+                </div>
+                <button onclick="closePaymentModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Banner Total -->
+            <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex justify-between items-center">
+                <span class="text-xs font-semibold text-slate-600">Total del Pedido:</span>
+                <span id="pay-modal-total" class="text-[#2563eb] text-xl font-bold">$0</span>
+            </div>
+
+            <!-- Mozo que realiza el cobro -->
+            <div>
+                <label class="text-xs font-semibold text-slate-700 block mb-1">Mozo que Cobra la Mesa</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+                        <i class="fa-solid fa-user-check text-xs"></i>
+                    </span>
+                    <select id="pay-waiter-select"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                    </select>
+                </div>
+            </div>
+
+            <!-- 1. Método de Pago: Efectivo / Transferencia -->
+            <div>
+                <label class="text-xs font-semibold text-slate-700 block mb-2">1. Método de Pago</label>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button type="button" id="btn-method-efectivo" onclick="selectPaymentMethod('Efectivo')"
+                        class="py-2.5 px-3 rounded-xl border-2 border-[#2563eb] bg-blue-50/70 text-[#2563eb] font-bold text-xs flex items-center justify-center space-x-2 transition-all">
+                        <i class="fa-solid fa-money-bill-wave"></i>
+                        <span>Efectivo</span>
+                    </button>
+                    <button type="button" id="btn-method-transferencia" onclick="selectPaymentMethod('Transferencia')"
+                        class="py-2.5 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-semibold text-xs flex items-center justify-center space-x-2 transition-all">
+                        <i class="fa-solid fa-building-columns"></i>
+                        <span>Transferencia</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. ¿Cuánto dejó / abonó el cliente? -->
+            <div class="space-y-3">
+                <div>
+                    <label id="cash-paid-label" class="text-xs font-semibold text-slate-700 block mb-1">2. ¿Cuánto dejó
+                        / abonó el cliente?</label>
+                    <div class="relative">
+                        <span
+                            class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 font-bold text-base">$</span>
+                        <input type="number" inputmode="numeric" id="cash-paid-input" oninput="onCashPaidInput()"
+                            placeholder="Ej: 20000"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3.5 py-2.5 text-base font-bold text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">Cálculo 100% a voluntad: la diferencia entre lo abonado y
+                        el total se sumará como propina.</p>
+                </div>
+
+                <!-- Propina calculada automáticamente por resta -->
+                <div class="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200 flex justify-between items-center">
+                    <div>
+                        <span class="text-xs font-bold text-[#2563eb] block">Propina a Voluntad (Caja General)</span>
+                        <span class="text-[10px] text-slate-500">Monto Abonado - Total del Pedido</span>
+                    </div>
+                    <span id="tip-calculated-display" class="text-lg font-bold text-[#2563eb]">$0</span>
+                </div>
+
+                <!-- Opción de dejar la mesa pagada (verde) o liberarla enseguida -->
+                <label class="flex items-center space-x-2.5 text-xs text-slate-700 bg-emerald-50/60 p-3 rounded-xl border border-emerald-200 cursor-pointer">
+                    <input type="checkbox" id="free-table-after-pay-checkbox" class="w-4 h-4 accent-emerald-600 rounded">
+                    <span>Liberar la mesa inmediatamente (si la dejas destildada queda en <strong>Verde / Pagada</strong> en Sistema Mozos para imprimir ticket)</span>
+                </label>
+            </div>
+
+            <div class="flex space-x-2 pt-1">
+                <button type="button" onclick="closePaymentModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button type="button" onclick="confirmPaymentAndFinish()"
+                    class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1.5">
+                    <i class="fa-solid fa-check-double"></i>
+                    <span>Marcar Pagado</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: ARMADO DE PIZZAS (1, 2 Y 3 GUSTOS) ================= -->
+    <div id="pizza-builder-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            
+            <!-- Encabezado del modal -->
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 text-sm">
+                        <i class="fa-solid fa-pizza-slice"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-slate-900">Armar Pizza</h3>
+                        <p class="text-[11px] text-slate-500 font-medium" id="pizza-modal-subtitle">Mesa 01</p>
+                    </div>
+                </div>
+                <button onclick="closePizzaBuilderModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Paso 1: Elegir Tamaño (Entera o Media) y Variedad de Gustos -->
+            <div class="space-y-2.5">
+                <div>
+                    <label class="text-xs font-bold text-slate-700 block mb-1.5">Tamaño de Pizza</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" id="btn-pizza-size-entera" onclick="setPizzaModalSize('entera')"
+                            class="py-2 px-3 rounded-xl border-2 border-[#2563eb] bg-blue-50/80 text-[#2563eb] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                            <i class="fa-solid fa-circle"></i>
+                            <span>Pizza Entera</span>
+                        </button>
+                        <button type="button" id="btn-pizza-size-media" onclick="setPizzaModalSize('media')"
+                            class="py-2 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-circle-half-stroke"></i>
+                            <span>Media Pizza</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-700 block mb-1.5">Cantidad de Gustos</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" id="btn-pizza-gustos-1" onclick="setPizzaFlavorsCount(1)"
+                            class="py-2.5 px-2 rounded-2xl border-2 border-[#2563eb] bg-blue-50/80 text-[#2563eb] font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all shadow-sm">
+                            <span class="text-base font-black">1 Gusto</span>
+                            <span class="text-[10px] text-blue-600 font-medium">Un sabor</span>
+                        </button>
+                        <button type="button" id="btn-pizza-gustos-2" onclick="setPizzaFlavorsCount(2)"
+                            class="py-2.5 px-2 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all">
+                            <span class="text-base font-black">2 Gustos</span>
+                            <span class="text-[10px] text-slate-400 font-medium">Mitad y Mitad</span>
+                        </button>
+                        <button type="button" id="btn-pizza-gustos-3" onclick="setPizzaFlavorsCount(3)"
+                            class="py-2.5 px-2 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all">
+                            <span class="text-base font-black">3 Gustos</span>
+                            <span class="text-[10px] text-slate-400 font-medium">3 Sabores</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Paso 2: Selección de los sabores según la cantidad elegida -->
+            <div class="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                <label class="text-xs font-bold text-slate-700 block mb-1">2. Elegir Gustos / Sabores</label>
+                
+                <!-- Gusto 1 (Siempre visible) -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                            <span id="badge-gusto-1" class="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center font-bold">1</span>
+                            <span id="label-gusto-1">Gusto de la Pizza (Entera)</span>
+                        </span>
+                        <span id="price-gusto-1" class="text-[11px] font-bold text-[#2563eb]">$0</span>
+                    </div>
+                    <select id="select-pizza-flavor-1" onchange="onPizzaFlavorSelectChange()"
+                        class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                    </select>
+                </div>
+
+                <!-- Gusto 2 (Visible en 2 o 3 gustos) -->
+                <div id="container-gusto-2" class="hidden pt-2 border-t border-slate-200/70">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                            <span class="w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center font-bold">2</span>
+                            <span id="label-gusto-2">Segundo Gusto (1/2)</span>
+                        </span>
+                        <span id="price-gusto-2" class="text-[11px] font-bold text-[#2563eb]">$0</span>
+                    </div>
+                    <select id="select-pizza-flavor-2" onchange="onPizzaFlavorSelectChange()"
+                        class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                    </select>
+                </div>
+
+                <!-- Gusto 3 (Visible solo en 3 gustos) -->
+                <div id="container-gusto-3" class="hidden pt-2 border-t border-slate-200/70">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                            <span class="w-4 h-4 rounded-full bg-emerald-600 text-white text-[9px] flex items-center justify-center font-bold">3</span>
+                            <span>Tercer Gusto (1/3)</span>
+                        </span>
+                        <span id="price-gusto-3" class="text-[11px] font-bold text-[#2563eb]">$0</span>
+                    </div>
+                    <select id="select-pizza-flavor-3" onchange="onPizzaFlavorSelectChange()"
+                        class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                    </select>
+                </div>
+
+                <!-- Opción de Gusto Personalizado si no está en la carta -->
+                <div class="pt-1">
+                    <details class="text-xs text-slate-500">
+                        <summary class="cursor-pointer text-[11px] font-medium text-blue-600 hover:text-blue-700">
+                            + ¿Gusto especial o fuera de carta?
+                        </summary>
+                        <div class="mt-2 space-y-2">
+                            <input type="text" id="pizza-custom-flavor-input" placeholder="Ej: Con rúcula fresca y aceitunas negras"
+                                oninput="onPizzaFlavorSelectChange()"
+                                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Paso 3: Nota de Cocina y Cantidad -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-bold text-slate-700 block mb-1">Aclaración para Cocina (Opcional)</label>
+                    <input type="text" id="pizza-note-input" placeholder="Ej: Bien cocida / sin orégano"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-700 block mb-1">Cantidad de Pizzas</label>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="changePizzaModalQty(-1)"
+                            class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition-all">
+                            <i class="fa-solid fa-minus text-xs"></i>
+                        </button>
+                        <input type="number" id="pizza-qty-input" value="1" min="1" readonly
+                            class="w-14 text-center bg-slate-50 border border-slate-200 rounded-xl py-2 font-bold text-sm text-slate-900">
+                        <button type="button" onclick="changePizzaModalQty(1)"
+                            class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#2563eb] font-bold flex items-center justify-center transition-all">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumen de Pizza a agregar y Precio Total -->
+            <div class="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200 space-y-1.5">
+                <div class="flex justify-between items-start gap-2">
+                    <div class="min-w-0">
+                        <span class="text-[10px] uppercase font-bold text-blue-700 block">Detalle de la Pizza</span>
+                        <h5 id="pizza-preview-name" class="font-bold text-xs sm:text-sm text-slate-900 leading-snug">Pizza Muzzarella (Entera)</h5>
+                        <p id="pizza-preview-calculation" class="text-[10px] text-slate-500 mt-0.5">$8.500 c/u</p>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <span class="text-[10px] uppercase font-bold text-blue-700 block">Subtotal</span>
+                        <span id="pizza-preview-total" class="text-base sm:text-lg font-bold text-[#2563eb]">$8.500</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="flex space-x-2 pt-1">
+                <button type="button" onclick="closePizzaBuilderModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button type="button" onclick="confirmAddPizzaToOrder()"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-1.5 cursor-pointer">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Agregar a Comanda</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: PIZZA LIBRE (1RA RONDA) ================= -->
+    <div id="pizza-libre-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center">
+                        <i class="fa-solid fa-pizza-slice text-xs"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-slate-900">Pizza Libre</h3>
+                        <p class="text-xs text-slate-500">$16.000 por persona (1ra Ronda)</p>
+                    </div>
+                </div>
+                <button onclick="closePizzaLibreModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <label class="text-xs font-semibold text-slate-700 block">Cantidad de Personas</label>
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl p-2">
+                    <button type="button" onclick="changePizzaLibreCount(-1)"
+                        class="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-200 text-slate-700 font-bold text-base flex items-center justify-center hover:bg-slate-100 transition-all">
+                        <i class="fa-solid fa-minus text-xs"></i>
+                    </button>
+                    <div class="text-center">
+                        <span id="pizza-libre-count" class="text-2xl font-black text-slate-900">1</span>
+                        <span class="text-[10px] text-slate-400 block font-medium">personas</span>
+                    </div>
+                    <button type="button" onclick="changePizzaLibreCount(1)"
+                        class="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-200 text-[#2563eb] font-bold text-base flex items-center justify-center hover:bg-blue-50 transition-all">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                    </button>
+                </div>
+
+                <div class="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex justify-between items-center">
+                    <span class="text-xs font-semibold text-slate-600">Total a cobrar:</span>
+                    <span id="pizza-libre-total-display" class="text-base font-bold text-[#2563eb]">$16.000</span>
+                </div>
+
+                <!-- Observación: Qué gustos NO quieren -->
+                <div class="space-y-1.5 pt-1">
+                    <label class="text-xs font-semibold text-slate-700 block flex items-center justify-between">
+                        <span>Gustos que NO quieren</span>
+                        <span class="text-[10px] text-slate-400 font-normal">Toca para marcar</span>
+                    </label>
+                    <div class="flex flex-wrap gap-1.5" id="pizza-libre-exclusion-chips">
+                        <!-- Generados dinámicamente -->
+                    </div>
+                    <textarea id="pizza-libre-exclusions-text" rows="2" placeholder="Ej: Sin cebolla, sin anchoa, etc..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#2563eb]"></textarea>
+                </div>
+            </div>
+
+            <div class="flex space-x-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closePizzaLibreModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button type="button" onclick="confirmAddPizzaLibre()"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-1.5 cursor-pointer">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Confirmar 1ra Ronda</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: SIGUIENTE RONDA PIZZA LIBRE ($0) ================= -->
+    <div id="pizza-libre-next-round-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200">
+                        <i class="fa-solid fa-arrows-rotate text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-slate-900" id="next-round-modal-title">Pedir Siguiente Ronda</h3>
+                        <p class="text-xs text-slate-500" id="next-round-modal-subtitle">Pizza Libre</p>
+                    </div>
+                </div>
+                <button onclick="closeNextRoundModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5 flex items-center justify-between">
+                <span class="text-xs font-semibold text-emerald-800">Costo adicional:</span>
+                <span class="text-sm font-bold text-emerald-600">$0 (Servicio Libre ya cobrado)</span>
+            </div>
+
+            <div class="space-y-3">
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-700 block">Gustos que NO quieren en la mesa</label>
+                    <input type="text" id="next-round-exclusions-input" placeholder="Ej: Sin cebolla, sin anchoa..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-semibold text-slate-700 block flex items-center justify-between">
+                        <span>Gustos para esta ronda (Opcional)</span>
+                        <span class="text-[10px] text-slate-400 font-normal">Toca para agregar</span>
+                    </label>
+                    <div class="flex flex-wrap gap-1.5" id="next-round-flavor-chips">
+                        <!-- Generados dinámicamente -->
+                    </div>
+                    <textarea id="next-round-notes" rows="2" placeholder="Ej: 2 Muzzarella y 1 Napolitana..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#2563eb]"></textarea>
+                </div>
+            </div>
+
+            <div class="flex space-x-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closeNextRoundModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button type="button" onclick="confirmAddNextRound()"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-1.5 cursor-pointer">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Marchar Ronda ($0)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: EDITAR PLATO EN CARTA ================= -->
+    <div id="admin-edit-item-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center">
+                        <i class="fa-solid fa-pen-to-square text-xs"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm text-slate-900">Editar Plato en Carta</h3>
+                        <p class="text-[10px] text-slate-500">Actualiza precio y datos en Neon DB</p>
+                    </div>
+                </div>
+                <button onclick="closeEditMenuItemModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="edit-item-cat">
+            <input type="hidden" id="edit-item-id">
+
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 block mb-1">Nombre</label>
+                    <input type="text" id="edit-item-name"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 block mb-1">Precio ($)</label>
+                    <input type="number" inputmode="numeric" id="edit-item-price"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#2563eb]">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600 block mb-1">Descripción / Ingredientes</label>
+                    <textarea id="edit-item-desc" rows="2"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]"></textarea>
+                </div>
+            </div>
+
+            <div class="flex space-x-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closeEditMenuItemModal()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button type="button" onclick="saveEditedMenuItem()"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-1.5 cursor-pointer">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>Guardar Cambios</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: REGISTRO HISTÓRICO DE PAGOS ================= -->
+    <div id="payment-history-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div
+            class="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[88vh]">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3 shrink-0">
+                <div class="flex items-center space-x-2.5">
+                    <div
+                        class="w-9 h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-200">
+                        <i class="fa-solid fa-clipboard-list text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-slate-900">Registro de Pagos y Cierre de Mesas</h3>
+                        <p class="text-[11px] text-slate-500">Historial de cobros realizados en Efectivo y Transferencia
+                        </p>
+                    </div>
+                </div>
+                <button onclick="closePaymentHistoryModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Resumen Rápido -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 my-4 shrink-0">
+                <div class="bg-slate-50 border border-slate-200 p-3 rounded-2xl">
+                    <span class="text-[10px] text-slate-500 uppercase font-semibold block">Total Ventas</span>
+                    <span id="reg-total-sales" class="text-sm sm:text-base font-bold text-slate-900">$0</span>
+                </div>
+                <div class="bg-emerald-50/60 border border-emerald-200 p-3 rounded-2xl">
+                    <span class="text-[10px] text-emerald-700 uppercase font-semibold block">En Efectivo</span>
+                    <span id="reg-total-cash" class="text-sm sm:text-base font-bold text-emerald-700">$0</span>
+                </div>
+                <div class="bg-indigo-50/60 border border-indigo-200 p-3 rounded-2xl">
+                    <span class="text-[10px] text-indigo-700 uppercase font-semibold block">Transferencia</span>
+                    <span id="reg-total-transfer" class="text-sm sm:text-base font-bold text-indigo-700">$0</span>
+                </div>
+                <div class="bg-blue-50/60 border border-blue-200 p-3 rounded-2xl">
+                    <span class="text-[10px] text-[#2563eb] uppercase font-semibold block">Propinas Caja</span>
+                    <span id="reg-total-tips" class="text-sm sm:text-base font-bold text-[#2563eb]">$0</span>
+                </div>
+            </div>
+
+            <!-- Lista de Transacciones -->
+            <div id="payment-history-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 divide-y divide-slate-100">
+                <!-- Filas de pagos -->
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 mt-3 shrink-0">
+                <button onclick="closePaymentHistoryModal()"
+                    class="w-full bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cerrar Registro
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: CAJA GENERAL DE PROPINAS ================= -->
+    <div id="tips-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <div
+                        class="w-9 h-9 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center border border-blue-100">
+                        <i class="fa-solid fa-wallet text-sm"></i>
+                    </div>
+                    <h3 class="font-bold text-base text-slate-900">Caja General de Propinas</h3>
+                </div>
+                <button onclick="closeTipsModal()"
+                    class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="bg-blue-50/60 p-5 rounded-2xl border border-blue-100 text-center space-y-1">
+                <span class="text-xs text-slate-600 font-medium block">Fondo Acumulado del Turno</span>
+                <span id="tips-grand-total" class="text-3xl font-bold text-[#2563eb]">$0</span>
+                <p class="text-[11px] text-slate-500 pt-1">Se suma automáticamente al cobrar cada comanda por resta de
+                    lo abonado por el cliente.</p>
+            </div>
+
+            <div class="flex space-x-2">
+                <button onclick="openPaymentHistoryFromTips()"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Ver Registro de Pagos
+                </button>
+                <button onclick="closeTipsModal()"
+                    class="flex-1 bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL PERSONALIZADO (CERO ALERTS NATIVOS) ================= -->
+    <div id="custom-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+            <div
+                class="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563eb] flex items-center justify-center mx-auto text-xl border border-blue-100">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            <div>
+                <h4 id="modal-title" class="font-bold text-base text-slate-900">Aviso</h4>
+                <p id="modal-message" class="text-xs text-slate-500 mt-1 leading-relaxed">Mensaje del sistema.</p>
+            </div>
+            <button onclick="closeModal()"
+                class="w-full bg-[#2563eb] hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/20">
+                Aceptar
+            </button>
+        </div>
+    </div>
+
+    <!-- ================= MODAL DE CONFIRMACIÓN ================= -->
+    <div id="confirm-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+            <div
+                class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-xl border border-rose-100">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+                <h4 id="confirm-modal-title" class="font-bold text-base text-slate-900">Confirmar</h4>
+                <p id="confirm-modal-message" class="text-xs text-slate-500 mt-1 leading-relaxed">¿Deseas continuar?</p>
+            </div>
+            <div class="flex space-x-2 pt-1">
+                <button onclick="closeConfirmModal(false)"
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+                <button onclick="closeConfirmModal(true)" id="confirm-modal-action-btn"
+                    class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-rose-500/20">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de lógica de la aplicación -->
+    <script src="app.js"></script>
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+</body>
+
+</html>
