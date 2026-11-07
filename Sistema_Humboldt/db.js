@@ -552,23 +552,26 @@ function buildMenuFromMozosPrices(prices) {
         bevCategory: b.category || 'otro'
     }));
 
-    return {
-        pizzas: {
+    return [
+        {
+            id: 'pizzas',
             title: 'Pizzas y Pizza Libre',
-            icon: 'local_pizza',
+            icon: 'fa-pizza-slice',
             items: pizzaItems
         },
-        empanadas_postres: {
+        {
+            id: 'empanadas_postres',
             title: 'Empanadas y Postres',
-            icon: 'lunch_dining',
+            icon: 'fa-utensils',
             items: empanadasYOtros
         },
-        bebidas: {
+        {
+            id: 'bebidas',
             title: 'Bebidas',
-            icon: 'local_bar',
+            icon: 'fa-wine-glass',
             items: bebidasItems
         }
-    };
+    ];
 }
 
 let isInitialized = false;

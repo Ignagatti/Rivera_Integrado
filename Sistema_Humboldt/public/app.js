@@ -104,11 +104,15 @@ async function fetchServerState(silent = false) {
         currentMode = data.currentMode || 'sabado';
         genericData = data.genericData || {};
 
-        const rawMenu = Array.isArray(data.menuData) ? data.menuData : [];
+        const rawMenu = Array.isArray(data.menuData)
+            ? data.menuData
+            : (data.menuData && typeof data.menuData === 'object')
+                ? Object.entries(data.menuData).map(([id, cat]) => ({ id, ...cat }))
+                : [];
         menuData = rawMenu.map(cat => ({
             id: cat.id,
             name: cat.title || cat.name || cat.id,
-            icon: cat.icon || getCategoryIcon(cat.id),
+            icon: getCategoryIcon(cat.id),
             items: Array.isArray(cat.items) ? cat.items : []
         }));
 
