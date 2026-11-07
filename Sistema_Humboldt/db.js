@@ -44,65 +44,17 @@ pool.on('error', (err) => {
 });
 
 const DEFAULT_MOZOS_PRICES = {
-    pizzaLibreH: 16000,
-    pizzaLibreM: 16000,
-    pizzaLibreG: 16000,
-    empanada: 1500,
-    precioPostre: 3500,
-    precioMenuMartes: 10000,
-    precioMenuMiercoles: 10000,
-    precioMenuViernes: 12000,
-    precioMenuDomingo: 12000,
-    preciosPizzas: [
-        { name: 'Muzzarella', precioEntera: 12000, precioMedia: 6000 },
-        { name: 'Provenzal', precioEntera: 13000, precioMedia: 6500 },
-        { name: 'Cebolla', precioEntera: 13000, precioMedia: 6500 },
-        { name: 'Calabresa', precioEntera: 14500, precioMedia: 7250 },
-        { name: 'Margarita', precioEntera: 13500, precioMedia: 6750 },
-        { name: 'Napolitana', precioEntera: 14000, precioMedia: 7000 },
-        { name: 'Anchoas', precioEntera: 14500, precioMedia: 7250 },
-        { name: 'Rucula', precioEntera: 15000, precioMedia: 7500 },
-        { name: 'Especial', precioEntera: 15000, precioMedia: 7500 },
-        { name: 'Tres quesos', precioEntera: 15000, precioMedia: 7500 },
-        { name: 'Roquefort', precioEntera: 15500, precioMedia: 7750 }
-    ],
-    beverages: [
-        { name: 'Lata de Coca', price: 2500, category: 'gaseosa' },
-        { name: 'Lata de Coca Zero', price: 2500, category: 'gaseosa' },
-        { name: 'Lata de Sprite', price: 2500, category: 'gaseosa' },
-        { name: 'Lata de Fanta', price: 2500, category: 'gaseosa' },
-        { name: 'Lata de Schweppes Pomelo', price: 2500, category: 'gaseosa' },
-        { name: 'Lata de Tonica', price: 2500, category: 'gaseosa' },
-        { name: 'Coca 1.5L', price: 5000, category: 'gaseosa' },
-        { name: 'Coca Zero 1.5L', price: 5000, category: 'gaseosa' },
-        { name: 'Sprite 1.5L', price: 5000, category: 'gaseosa' },
-        { name: 'Fanta 1.5L', price: 5000, category: 'gaseosa' },
-        { name: 'Schweppes Pomelo 1.5L', price: 5000, category: 'gaseosa' },
-        { name: 'Agua con gas', price: 2200, category: 'agua' },
-        { name: 'Agua sin gas', price: 2200, category: 'agua' },
-        { name: 'Agua saborizada manzana', price: 2500, category: 'agua_saborizada' },
-        { name: 'Agua saborizada naranja', price: 2500, category: 'agua_saborizada' },
-        { name: 'Agua saborizada pomelo', price: 2500, category: 'agua_saborizada' },
-        { name: 'Agua saborizada pera', price: 2500, category: 'agua_saborizada' },
-        { name: 'Heineken 1L', price: 7500, category: 'cerveza' },
-        { name: 'Miller', price: 6500, category: 'cerveza' },
-        { name: 'Imperial IPA', price: 6500, category: 'cerveza' },
-        { name: 'Imperial Golden', price: 6500, category: 'cerveza' },
-        { name: 'Imperial Lager', price: 6500, category: 'cerveza' },
-        { name: 'Imperial Negra', price: 6500, category: 'cerveza' },
-        { name: 'Lata cerveza sin alcohol', price: 3500, category: 'cerveza' },
-        { name: 'Lata Imperial Golden', price: 3500, category: 'cerveza' },
-        { name: 'Lata Imperial Roja', price: 3500, category: 'cerveza' },
-        { name: 'Lata Heineken', price: 4000, category: 'cerveza' },
-        { name: 'Santa Julia Malbec', price: 9000, category: 'vino' },
-        { name: 'Santa Julia Chenin Dulce', price: 9000, category: 'vino' },
-        { name: 'Cordero con Piel de Lobo Malbec', price: 10500, category: 'vino' },
-        { name: 'Fernet vaso', price: 5000, category: 'trago' },
-        { name: 'Campari vaso', price: 4500, category: 'trago' },
-        { name: 'Gancia vaso', price: 4200, category: 'trago' },
-        { name: 'Gin vaso', price: 5500, category: 'trago' },
-        { name: 'Vermouth vaso', price: 4200, category: 'trago' }
-    ]
+    pizzaLibreH: 0,
+    pizzaLibreM: 0,
+    pizzaLibreG: 0,
+    empanada: 0,
+    precioPostre: 0,
+    precioMenuMartes: 0,
+    precioMenuMiercoles: 0,
+    precioMenuViernes: 0,
+    precioMenuDomingo: 0,
+    preciosPizzas: [],
+    beverages: []
 };
 
 const DEFAULT_GENERIC_DATA = {
@@ -110,27 +62,15 @@ const DEFAULT_GENERIC_DATA = {
     address: '',
     phone: '',
     email: '',
-    footer: '¡Gracias por su visita!',
+    footer: '',
     alias: ''
 };
 
 const DEFAULT_PEDIDOS_PRICES = {
-    box: 1000,
-    empanada: 1500,
-    pizzaLibreH: 16000,
-    flavors: {
-        'Muzzarella': { entera: 12000, media: 6000 },
-        'Provenzal': { entera: 13000, media: 6500 },
-        'Cebolla': { entera: 13000, media: 6500 },
-        'Calabresa': { entera: 14500, media: 7250 },
-        'Margarita': { entera: 13500, media: 6750 },
-        'Napolitana': { entera: 14000, media: 7000 },
-        'Anchoa': { entera: 14500, media: 7250 },
-        'Rúcula': { entera: 15000, media: 7500 },
-        'Especial': { entera: 15000, media: 7500 },
-        '3 Quesos': { entera: 15000, media: 7500 },
-        'Roquefort': { entera: 15500, media: 7750 }
-    },
+    box: 0,
+    empanada: 0,
+    pizzaLibreH: 0,
+    flavors: {},
     drinks: {}
 };
 
@@ -592,15 +532,43 @@ function buildMenuFromMozosPrices(prices) {
         }
     ];
 
-    const bebidasItems = (p.beverages || []).map((b, idx) => ({
-        id: `bev_${idx}`,
-        name: b.name,
-        price: Number(b.price) || 0,
-        desc: b.category ? b.category.replace('_', ' ').toUpperCase() : 'BEBIDA',
-        isPizza: false,
-        isBeverage: true,
-        bevCategory: b.category || 'otro'
-    }));
+    const resolveBevCat = (name, category) => {
+        if (category && category !== 'otro') {
+            if (category === 'trago') return 'jarro';
+            if (category === 'agua_saborizada' || category === 'saborizada') return 'agua';
+            return category;
+        }
+        const n = (name || '').toLowerCase();
+        if (n.includes('fernet') || n.includes('gancia') || n.includes('jarro') || n.includes('trago') || n.includes('campari') || n.includes('gin') || n.includes('vodka') || n.includes('piña') || n.includes('whisky') || n.includes('ginebra') || n.includes('medida')) return 'jarro';
+        if (n.includes('agua') || n.includes('soda') || n.includes('saborizada')) return 'agua';
+        if (n.includes('cerveza') || n.includes('heineken') || n.includes('pilsen') || n.includes('santa fe') || n.includes('corona') || n.includes('stella')) return 'cerveza';
+        if (n.includes('vino') || n.includes('malbec') || n.includes('cabernet') || n.includes('valentin') || n.includes('latitud') || n.includes('cordero') || n.includes('alma mora') || n.includes('cosecha') || n.includes('portillo') || n.includes('salentein') || n.includes('rutini')) return 'vino';
+        if (n.includes('lata') || n.includes('coca') || n.includes('sprite') || n.includes('zero') || n.includes('pepsi') || n.includes('fanta') || n.includes('gaseosa')) return 'gaseosa';
+        return category || 'otro';
+    };
+
+    const bevCategoryLabels = {
+        cerveza: 'Cervezas',
+        gaseosa: 'Gaseosas y Saborizadas',
+        agua: 'Aguas y Sodas',
+        saborizada: 'Aguas y Sodas',
+        jarro: 'Tragos',
+        vino: 'Vinos',
+        otro: 'Otras Bebidas'
+    };
+
+    const bebidasItems = (p.beverages || []).map((b, idx) => {
+        const catId = resolveBevCat(b.name, b.category);
+        return {
+            id: `bev_${idx}`,
+            name: b.name,
+            price: Number(b.price) || 0,
+            desc: bevCategoryLabels[catId] || 'Otras Bebidas',
+            isPizza: false,
+            isBeverage: true,
+            bevCategory: catId
+        };
+    });
 
     return [
         {
@@ -704,7 +672,7 @@ async function initializeDatabase() {
             );
         `);
 
-        // Seed rivera_mozos_config
+        // Inicializar claves de estructura en rivera_mozos_config solo si no existen en la BDD
         const pricesRes = await client.query(`SELECT value FROM rivera_mozos_config WHERE key = 'prices'`);
         if (pricesRes.rowCount === 0) {
             await client.query(
@@ -743,37 +711,7 @@ async function initializeDatabase() {
             );
         }
 
-        // Seed rivera_tables (10 mesas iniciales si está vacío)
-        const tablesCount = await client.query(`SELECT COUNT(*) FROM rivera_tables`);
-        if (parseInt(tablesCount.rows[0].count, 10) === 0) {
-            for (let i = 1; i <= 10; i++) {
-                const col = (i - 1) % 5;
-                const row = Math.floor((i - 1) / 5);
-                const tData = {
-                    id: `table-init-${i}`,
-                    number: String(i),
-                    x: 40 + col * 130,
-                    y: 40 + row * 130,
-                    width: 100,
-                    height: 100,
-                    isPaid: false,
-                    paidAmount: 0,
-                    tipAmount: 0,
-                    waiterName: 'Sin asignar',
-                    note: '',
-                    libreRounds: 1,
-                    order: createEmptyMozosOrder(),
-                    humboldtItems: [],
-                    sentSnapshot: { empanadas: 0, pizzaIds: [], librePersons: 0, libreRounds: 0 }
-                };
-                await client.query(
-                    `INSERT INTO rivera_tables (table_number, table_data) VALUES ($1, $2::jsonb)`,
-                    [String(i), JSON.stringify(tData)]
-                );
-            }
-        }
-
-        // Seed rivera_pedidos_state
+        // Inicializar claves de estructura en rivera_pedidos_state solo si no existen en la BDD
         const pedKeys = [
             ['orders', []],
             ['libres', []],
@@ -790,7 +728,7 @@ async function initializeDatabase() {
             }
         }
 
-        // Seed pos_config
+        // Inicializar configuración base en pos_config
         const passRes = await client.query(`SELECT value FROM pos_config WHERE key = 'admin_password'`);
         if (passRes.rowCount === 0) {
             await client.query(`INSERT INTO pos_config (key, value) VALUES ('admin_password', '1234')`);
@@ -798,15 +736,6 @@ async function initializeDatabase() {
         const tipPoolRes = await client.query(`SELECT value FROM pos_config WHERE key = 'general_tips_pool'`);
         if (tipPoolRes.rowCount === 0) {
             await client.query(`INSERT INTO pos_config (key, value) VALUES ('general_tips_pool', '0')`);
-        }
-
-        // Seed pos_staff
-        const staffCount = await client.query(`SELECT COUNT(*) FROM pos_staff`);
-        if (parseInt(staffCount.rows[0].count, 10) === 0) {
-            const initialWaiters = ['Juan', 'María', 'Carlos', 'Lucía'];
-            for (const w of initialWaiters) {
-                await client.query(`INSERT INTO pos_staff (name) VALUES ($1) ON CONFLICT DO NOTHING`, [w]);
-            }
         }
 
         await client.query('COMMIT');

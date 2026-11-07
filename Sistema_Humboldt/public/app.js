@@ -948,7 +948,7 @@ function renderMenuItems() {
         return;
     }
 
-    container.innerHTML = items.map(item => {
+    const renderCard = (item) => {
         const isLibre = !!item.isPizzaLibre;
         const isPizza = !!item.isPizza && !isLibre;
         const displayPrice = (isPizza && activePizzaSize === 'media' && item.precioMedia)
@@ -997,7 +997,46 @@ function renderMenuItems() {
                 </div>
             </div>
         `;
-    }).join('');
+    };
+
+    if (category.id === 'bebidas' && !query) {
+        const bevGroups = [
+            { id: 'cerveza', label: 'Cervezas', icon: 'fa-beer-mug-empty' },
+            { id: 'gaseosa', label: 'Gaseosas y Saborizadas', icon: 'fa-bottle-water' },
+            { id: 'agua', label: 'Aguas y Sodas', icon: 'fa-glass-water' },
+            { id: 'jarro', label: 'Tragos', icon: 'fa-martini-glass-citrus' },
+            { id: 'vino', label: 'Vinos', icon: 'fa-wine-glass' },
+            { id: 'otro', label: 'Otras Bebidas', icon: 'fa-wine-bottle' }
+        ];
+
+        container.innerHTML = bevGroups.map(group => {
+            const groupItems = items.filter(it => {
+                const cat = it.bevCategory || 'otro';
+                if (group.id === 'agua') return cat === 'agua' || cat === 'saborizada';
+                if (group.id === 'jarro') return cat === 'jarro' || cat === 'trago';
+                return cat === group.id;
+            });
+            if (groupItems.length === 0) return '';
+            const countText = groupItems.length === 1 ? '1 opción' : `${groupItems.length} opciones`;
+            return `
+                <div class="col-span-full space-y-2.5 mb-2">
+                    <div class="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-slate-200 shadow-xs">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid ${group.icon} text-[#2563eb] text-sm"></i>
+                            <span class="font-extrabold text-slate-900 text-xs sm:text-sm">${group.label}</span>
+                        </div>
+                        <span class="text-[11px] font-bold text-[#2563eb] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">${countText}</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                        ${groupItems.map(renderCard).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        return;
+    }
+
+    container.innerHTML = items.map(renderCard).join('');
 }
 
 function onMenuItemClicked(itemId) {

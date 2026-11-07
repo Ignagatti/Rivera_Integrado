@@ -155,12 +155,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Categorías de bebidas organizadas
     const BEVERAGE_CATEGORIES = [
-        { id: 'vino', label: 'Vinos', icon: '🍷' },
         { id: 'cerveza', label: 'Cervezas', icon: '🍺' },
-        { id: 'gaseosa', label: 'Gaseosas', icon: '🥤' },
-        { id: 'agua', label: 'Aguas', icon: '💧' },
+        { id: 'gaseosa', label: 'Gaseosas y Saborizadas', icon: '🥤' },
+        { id: 'agua', label: 'Aguas y Sodas', icon: '💧' },
         { id: 'saborizada', label: 'Aguas Saborizadas', icon: '🍊' },
-        { id: 'jarro', label: 'Jarros / Tragos', icon: '🍹' },
+        { id: 'jarro', label: 'Tragos', icon: '🍹' },
+        { id: 'vino', label: 'Vinos', icon: '🍷' },
         { id: 'otro', label: 'Otras Bebidas', icon: '📦' }
     ];
 
@@ -187,14 +187,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function resolveBeverageCategory(name, category) {
-        if (category && category !== 'otro') return category;
+        if (category && category !== 'otro') {
+            if (category === 'trago') return 'jarro';
+            return category;
+        }
         const n = (name || '').toLowerCase();
-        if (n.includes('agua') && !n.includes('saborizada')) return 'agua';
-        if (n.includes('saborizada') || n.includes('naranja') || n.includes('pomelo') || n.includes('manzana')) return 'saborizada';
+        if (n.includes('fernet') || n.includes('gancia') || n.includes('jarro') || n.includes('trago') || n.includes('campari') || n.includes('gin') || n.includes('vodka') || n.includes('piña') || n.includes('whisky') || n.includes('ginebra') || n.includes('medida')) return 'jarro';
+        if ((n.includes('agua') || n.includes('soda')) && !n.includes('saborizada')) return 'agua';
+        if (n.includes('saborizada') || n.includes('naranja') || n.includes('pomelo') || n.includes('manzana')) return 'agua';
         if (n.includes('lata') || n.includes('coca') || n.includes('sprite') || n.includes('zero') || n.includes('pepsi') || n.includes('fanta') || n.includes('gaseosa')) return 'gaseosa';
         if (n.includes('cerveza') || n.includes('heineken') || n.includes('corona') || n.includes('pilsen') || n.includes('stella') || n.includes('brahma') || n.includes('quilmes') || n.includes('santa fe')) return 'cerveza';
-        if (n.includes('vino') || n.includes('malbec') || n.includes('cabernet') || n.includes('tintillo') || n.includes('chardonnay') || n.includes('syrah') || n.includes('merlot') || n.includes('valentin') || n.includes('latitud') || n.includes('cordero') || n.includes('alma mora')) return 'vino';
-        if (n.includes('fernet') || n.includes('gancia') || n.includes('jarro') || n.includes('trago') || n.includes('campari') || n.includes('gin') || n.includes('vodka')) return 'jarro';
+        if (n.includes('vino') || n.includes('malbec') || n.includes('cabernet') || n.includes('tintillo') || n.includes('chardonnay') || n.includes('syrah') || n.includes('merlot') || n.includes('valentin') || n.includes('latitud') || n.includes('cordero') || n.includes('alma mora') || n.includes('cosecha') || n.includes('portillo') || n.includes('salentein') || n.includes('rutini')) return 'vino';
         return category || 'otro';
     }
 

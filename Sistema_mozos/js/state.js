@@ -1,44 +1,10 @@
-// Valores por defecto — se usan al arrancar y como base para el merge al cargar
+// Valores estructurales base — los precios y bebidas reales viven en la BDD Neon PostgreSQL
 const DEFAULT_PRICES = {
-    pizzaLibreH: 10500, pizzaLibreM: 9500, pizzaLibreG: 10000,
-    empanada: 200, precioPostre: 0,
+    pizzaLibreH: 0, pizzaLibreM: 0, pizzaLibreG: 0,
+    empanada: 0, precioPostre: 0,
     precioMenuMartes: 0, precioMenuMiercoles: 0, precioMenuViernes: 0, precioMenuDomingo: 0,
-    preciosPizzas: [
-        { name: 'Muzzarella', precioEntera: 0, precioMedia: 0 },
-        { name: 'Provenzal',  precioEntera: 0, precioMedia: 0 },
-        { name: 'Cebollada',  precioEntera: 0, precioMedia: 0 },
-        { name: 'Margarita',  precioEntera: 0, precioMedia: 0 },
-        { name: 'Rucula',     precioEntera: 0, precioMedia: 0 },
-        { name: 'Calabresa',  precioEntera: 0, precioMedia: 0 },
-        { name: 'Especial',   precioEntera: 0, precioMedia: 0 },
-        { name: 'Napolitana', precioEntera: 0, precioMedia: 0 },
-        { name: '3 Quesos',   precioEntera: 0, precioMedia: 0 },
-        { name: 'Roquefort',  precioEntera: 0, precioMedia: 0 },
-        { name: 'Anchoas',    precioEntera: 0, precioMedia: 0 }
-    ],
-    beverages: [
-        { name: 'Lata de Coca',                 price: 0, category: 'gaseosa'    },
-        { name: 'Lata de Sprite',               price: 0, category: 'gaseosa'    },
-        { name: 'Coca-Cola 1.5L',               price: 0, category: 'gaseosa'    },
-        { name: 'Sprite 1.5L',                  price: 0, category: 'gaseosa'    },
-        { name: 'Coca-Cola Zero 1.5L',          price: 0, category: 'gaseosa'    },
-        { name: 'Agua 1.5L',                    price: 0, category: 'agua'       },
-        { name: 'Agua Saborizada Naranja',       price: 0, category: 'saborizada' },
-        { name: 'Agua Saborizada Pomelo',        price: 0, category: 'saborizada' },
-        { name: 'Agua Saborizada Manzana',       price: 0, category: 'saborizada' },
-        { name: 'Jarro Fernet',                  price: 0, category: 'jarro'      },
-        { name: 'Jarro Gancia',                  price: 0, category: 'jarro'      },
-        { name: 'Vino Latitud 33',               price: 0, category: 'vino'       },
-        { name: 'Vino Valentin Lacrado',         price: 0, category: 'vino'       },
-        { name: 'Vino Alma Mora',                price: 0, category: 'vino'       },
-        { name: 'Vino Cordero con Piel de Lobo', price: 0, category: 'vino'       },
-        { name: 'Vino Valentin Blanco',          price: 0, category: 'vino'       },
-        { name: 'Vaso de Vino con Soda',         price: 0, category: 'vino'       },
-        { name: 'Vaso de Vino Solo',             price: 0, category: 'vino'       },
-        { name: 'Cerveza Pilsen',                price: 0, category: 'cerveza'    },
-        { name: 'Cerveza Santa Fe',              price: 0, category: 'cerveza'    },
-        { name: 'Cerveza Heineken',              price: 0, category: 'cerveza'    }
-    ]
+    preciosPizzas: [],
+    beverages: []
 };
 
 const DEFAULT_GENERIC_DATA = {
@@ -93,14 +59,17 @@ async function saveState() {
 }
 
 function resolveBeverageCategory(name, category) {
-    if (category && category !== 'otro') return category;
+    if (category && category !== 'otro') {
+        if (category === 'trago') return 'jarro';
+        return category;
+    }
     const n = (name || '').toLowerCase();
-    if (n.includes('agua') && !n.includes('saborizada')) return 'agua';
-    if (n.includes('saborizada') || n.includes('naranja') || n.includes('pomelo') || n.includes('manzana')) return 'saborizada';
+    if (n.includes('fernet') || n.includes('gancia') || n.includes('jarro') || n.includes('trago') || n.includes('campari') || n.includes('gin') || n.includes('vodka') || n.includes('piña') || n.includes('whisky') || n.includes('ginebra') || n.includes('medida')) return 'jarro';
+    if ((n.includes('agua') || n.includes('soda')) && !n.includes('saborizada')) return 'agua';
+    if (n.includes('saborizada') || n.includes('naranja') || n.includes('pomelo') || n.includes('manzana')) return 'agua';
     if (n.includes('lata') || n.includes('coca') || n.includes('sprite') || n.includes('zero') || n.includes('pepsi') || n.includes('fanta') || n.includes('gaseosa')) return 'gaseosa';
     if (n.includes('cerveza') || n.includes('heineken') || n.includes('corona') || n.includes('pilsen') || n.includes('stella') || n.includes('brahma') || n.includes('quilmes') || n.includes('santa fe')) return 'cerveza';
-    if (n.includes('vino') || n.includes('malbec') || n.includes('cabernet') || n.includes('tintillo') || n.includes('chardonnay') || n.includes('syrah') || n.includes('merlot') || n.includes('valentin') || n.includes('latitud') || n.includes('cordero') || n.includes('alma mora')) return 'vino';
-    if (n.includes('fernet') || n.includes('gancia') || n.includes('jarro') || n.includes('trago') || n.includes('campari') || n.includes('gin') || n.includes('vodka')) return 'jarro';
+    if (n.includes('vino') || n.includes('malbec') || n.includes('cabernet') || n.includes('tintillo') || n.includes('chardonnay') || n.includes('syrah') || n.includes('merlot') || n.includes('valentin') || n.includes('latitud') || n.includes('cordero') || n.includes('alma mora') || n.includes('cosecha') || n.includes('portillo') || n.includes('salentein') || n.includes('rutini')) return 'vino';
     return category || 'otro';
 }
 
@@ -233,6 +202,21 @@ async function loadState() {
 
                 if (needsSyncBackToDb) {
                     await saveState();
+                } else {
+                    const snapshotStr = JSON.stringify({
+                        tables:          appState.tables,
+                        barOrders:       appState.barOrders,
+                        archivedSales:   appState.archivedSales || [],
+                        prices:          appState.prices,
+                        nextTableNumber: appState.nextTableNumber,
+                        currentMode:     appState.currentMode,
+                        numeroCocina:    appState.numeroCocina,
+                        genericData:     appState.genericData
+                    });
+                    localStorage.setItem('restaurantState', snapshotStr);
+                    if (window.electronAPI && window.electronAPI.saveBackup) {
+                        await window.electronAPI.saveBackup(snapshotStr);
+                    }
                 }
             }
         } catch (err) {
