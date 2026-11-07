@@ -93,6 +93,7 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
     const pedidosPizzas = [];
     let empQty = 0;
     let hasLibreItem = false;
+    const libreItemNotes = [];
 
     for (const item of newItems) {
         const sendQty = Number(item.sendQty ?? item.qty) || 0;
@@ -100,6 +101,13 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
 
         if (item.isPizzaLibre || item.isLibreRound) {
             hasLibreItem = true;
+            const itemNote = String(item.note || item.obs || '').trim();
+            if (itemNote && !libreItemNotes.includes(itemNote)) {
+                libreItemNotes.push(itemNote);
+            } else if (Array.isArray(item.libreExclusions) && item.libreExclusions.length > 0) {
+                const exStr = `NO QUIEREN: ${item.libreExclusions.join(', ')}`;
+                if (!libreItemNotes.includes(exStr)) libreItemNotes.push(exStr);
+            }
             continue;
         }
 
@@ -132,6 +140,7 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
 
             const desc = isMedia ? `Media ${flavorText}` : flavorText;
             const unitPrice = Number(item.price) || 0;
+            const pizzaObs = String(item.note || item.obs || '').trim();
 
             pedidosPizzas.push({
                 id: `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -142,7 +151,7 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
                 price: unitPrice,
                 unitPrice: unitPrice,
                 boxPrice: 0,
-                obs: item.note || note || '',
+                obs: pizzaObs,
                 withBox: false
             });
         }
@@ -157,6 +166,14 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
             ? ordersRes.rows[0].value
             : [];
 
+        const orderLevelObsParts = [];
+        if (note && String(note).trim()) orderLevelObsParts.push(String(note).trim());
+        for (const pz of pedidosPizzas) {
+            if (pz.obs && !orderLevelObsParts.includes(pz.obs)) {
+                orderLevelObsParts.push(`${pz.description}: ${pz.obs}`);
+            }
+        }
+
         const newPedidosOrder = {
             id: `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
             client: formattedClient,
@@ -170,7 +187,7 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
             totalPrice: 0,
             inKitchen: false,
             orderNumber: null,
-            obs: note || '',
+            obs: String(note || '').trim(),
             fromWaiter: true
         };
 
@@ -197,6 +214,15 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
             (Number(mozosOrder?.pizzaLibreH) || 0) +
             (Number(mozosOrder?.pizzaLibreM) || 0) || 1;
 
+        const combinedLibreObsParts = [...libreItemNotes];
+        if (mozosOrder?.libreObs && !combinedLibreObsParts.includes(mozosOrder.libreObs.trim())) {
+            combinedLibreObsParts.push(mozosOrder.libreObs.trim());
+        }
+        if (note && String(note).trim() && !combinedLibreObsParts.includes(String(note).trim())) {
+            combinedLibreObsParts.push(String(note).trim());
+        }
+        const combinedLibreObs = combinedLibreObsParts.filter(Boolean).join(' | ');
+
         const existingIdx = currentLibres.findIndex(
             l => formatTableName(extractTableNumber(l.client)).toLowerCase() === formattedClient.toLowerCase()
         );
@@ -208,7 +234,7 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
                 round: Number(libreRound) || (currentLibres[existingIdx].round || 1),
                 status: 'esperando',
                 timestamp: nowTime,
-                obs: note || currentLibres[existingIdx].obs || ''
+                obs: combinedLibreObs || currentLibres[existingIdx].obs || ''
             };
         } else {
             currentLibres.push({
@@ -221,7 +247,7 @@ async function enqueueToPedidosKitchen(client, tableName, newItems, mozosOrder, 
                 status: 'esperando',
                 timestamp: nowTime,
                 date: todayStr,
-                obs: note || ''
+                obs: combinedLibreObs
             });
         }
 
@@ -557,6 +583,29 @@ app.post('/api/tables/:name/save', async (req, res) => {
 
         const safeItems = Array.isArray(items) ? items : [];
         const mozosOrder = humboldtItemsToMozosOrder(safeItems, existingData.order, prices);
+        if (note && String(note).trim() && !mozosOrder.libreObs) {
+            mozosOrder.libreObs = String(note).trim();
+        }
+        const finalNote = (note !== undefined && String(note).trim())
+            ? String(note).trim()
+            : (mozosOrder.libreObs || existingData.note || '');
+
+        const hasPizzaItems = ((mozosOrder.pizzaLibreG || 0) + (mozosOrder.pizzaLibreH || 0) + (mozosOrder.pizzaLibreM || 0) > 0) ||
+            ((mozosOrder.pizzasPersonalizadas || []).length > 0);
+        if (hasPizzaItems) {
+            const modeRes = await client.query(`SELECT value FROM rivera_mozos_config WHERE key = 'currentMode'`);
+            const curMode = modeRes.rowCount > 0 ? modeRes.rows[0].value : 'sabado';
+            if (curMode !== 'jueves' && curMode !== 'sabado') {
+                const day = new Date().getDay();
+                const targetMode = day === 4 ? 'jueves' : 'sabado';
+                await client.query(
+                    `INSERT INTO rivera_mozos_config (key, value, updated_at)
+                     VALUES ('currentMode', $1::jsonb, CURRENT_TIMESTAMP)
+                     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+                    [JSON.stringify(targetMode)]
+                );
+            }
+        }
 
         // Si la mesa se vació por completo, resetear estado de pago
         const hasAnyItems = safeItems.length > 0;
@@ -564,7 +613,7 @@ app.post('/api/tables/:name/save', async (req, res) => {
             ...existingData,
             number: String(tableNum),
             waiterName: waiter || existingData.waiterName || 'Sin asignar',
-            note: note !== undefined ? note : (existingData.note || ''),
+            note: hasAnyItems ? finalNote : '',
             libreRounds: Number(libreRounds) || existingData.libreRounds || 1,
             order: mozosOrder,
             humboldtItems: safeItems,
@@ -624,10 +673,17 @@ app.post('/api/orders/send-kitchen', async (req, res) => {
         }));
 
         const mozosOrder = humboldtItemsToMozosOrder(safeItems, existingData.order, prices);
+        if (note && String(note).trim() && !mozosOrder.libreObs) {
+            mozosOrder.libreObs = String(note).trim();
+        }
+        const finalNote = (note !== undefined && String(note).trim())
+            ? String(note).trim()
+            : (mozosOrder.libreObs || existingData.note || '');
 
-        // Si se pide Pizza Libre en un día distinto a jueves/sábado en Sistema_mozos, asegurar modo sábado/jueves
-        const hasPizzaLibre = (mozosOrder.pizzaLibreG || 0) + (mozosOrder.pizzaLibreH || 0) + (mozosOrder.pizzaLibreM || 0) > 0;
-        if (hasPizzaLibre) {
+        // Si se pide Pizza Libre o Pizzas en un día distinto a jueves/sábado en Sistema_mozos, asegurar modo sábado/jueves
+        const hasPizzaItems = ((mozosOrder.pizzaLibreG || 0) + (mozosOrder.pizzaLibreH || 0) + (mozosOrder.pizzaLibreM || 0) > 0) ||
+            ((mozosOrder.pizzasPersonalizadas || []).length > 0);
+        if (hasPizzaItems) {
             const modeRes = await client.query(`SELECT value FROM rivera_mozos_config WHERE key = 'currentMode'`);
             const curMode = modeRes.rowCount > 0 ? modeRes.rows[0].value : 'sabado';
             if (curMode !== 'jueves' && curMode !== 'sabado') {
@@ -646,7 +702,7 @@ app.post('/api/orders/send-kitchen', async (req, res) => {
             ...existingData,
             number: String(tableNum),
             waiterName: waiter || existingData.waiterName || 'Sin asignar',
-            note: note !== undefined ? note : (existingData.note || ''),
+            note: finalNote,
             libreRounds: Number(libreRound) || existingData.libreRounds || 1,
             order: mozosOrder,
             humboldtItems: safeItems,

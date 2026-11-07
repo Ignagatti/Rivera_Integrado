@@ -63,6 +63,7 @@ function getNewOrderObject() {
         pizzaLibreH: 0, pizzaLibreM: 0, pizzaLibreG: 0,
         menores: 0, menorPrice: 0,
         empanadas: 0, postres: 0, menu: 0,
+        libreObs: '',
         beverages: [], pizzasPersonalizadas: []
     };
 }
@@ -145,20 +146,69 @@ async function loadState() {
         try {
             const dbState = await window.electronAPI.loadDbState();
             if (dbState) {
+                const orderHasItems = (ord) => {
+                    if (!ord) return false;
+                    return (
+                        (ord.pizzaLibreH || 0) > 0 ||
+                        (ord.pizzaLibreM || 0) > 0 ||
+                        (ord.pizzaLibreG || 0) > 0 ||
+                        (ord.menores || 0) > 0 ||
+                        (ord.empanadas || 0) > 0 ||
+                        (ord.postres || 0) > 0 ||
+                        (ord.menu || 0) > 0 ||
+                        (Array.isArray(ord.beverages) && ord.beverages.length > 0) ||
+                        (Array.isArray(ord.pizzasPersonalizadas) && ord.pizzasPersonalizadas.length > 0)
+                    );
+                };
+
+                let needsSyncBackToDb = false;
+
                 if (Array.isArray(dbState.tables) && dbState.tables.length > 0) {
-                    const localMap = new Map(appState.tables.map(t => [String(t.number), t]));
-                    appState.tables = dbState.tables.map(dbt => {
-                        const loc = localMap.get(String(dbt.number));
-                        return {
+                    if (appState.tables.length > 0) {
+                        const dbMap = new Map(dbState.tables.map(t => [String(t.number), t]));
+                        const localNums = new Set(appState.tables.map(t => String(t.number)));
+                        const dbNums = new Set(dbState.tables.map(t => String(t.number)));
+
+                        if (localNums.size !== dbNums.size || [...localNums].some(n => !dbNums.has(n))) {
+                            needsSyncBackToDb = true;
+                        }
+
+                        // Conservar las mesas y números del plano local de Sistema_mozos, actualizando pedidos desde la DB
+                        appState.tables = appState.tables.map(loc => {
+                            const dbt = dbMap.get(String(loc.number));
+                            if (!dbt) return { ...loc, order: Object.assign(getNewOrderObject(), loc.order || {}) };
+                            const useDbOrder = orderHasItems(dbt.order) || dbt.isPaid || !orderHasItems(loc.order);
+                            return {
+                                ...loc,
+                                isPaid: useDbOrder ? !!dbt.isPaid : !!loc.isPaid,
+                                paidAmount: useDbOrder ? (Number(dbt.paidAmount) || 0) : (Number(loc.paidAmount) || 0),
+                                tipAmount: useDbOrder ? (Number(dbt.tipAmount) || 0) : (Number(loc.tipAmount) || 0),
+                                waiterName: dbt.waiterName || loc.waiterName || 'Sin asignar',
+                                note: dbt.note || loc.note || '',
+                                libreRounds: dbt.libreRounds || loc.libreRounds || 1,
+                                order: Object.assign(getNewOrderObject(), useDbOrder ? (dbt.order || {}) : (loc.order || {}))
+                            };
+                        });
+
+                        // Si en el POS se cargó un pedido en una mesa nueva que no estaba en local, sumarla
+                        for (const dbt of dbState.tables) {
+                            if (!localNums.has(String(dbt.number)) && (orderHasItems(dbt.order) || dbt.isPaid)) {
+                                appState.tables.push({
+                                    ...dbt,
+                                    order: Object.assign(getNewOrderObject(), dbt.order || {})
+                                });
+                            }
+                        }
+                    } else {
+                        appState.tables = dbState.tables.map(dbt => ({
                             ...dbt,
-                            x: loc && loc.x !== undefined ? loc.x : dbt.x,
-                            y: loc && loc.y !== undefined ? loc.y : dbt.y,
-                            width: loc && loc.width ? loc.width : dbt.width,
-                            height: loc && loc.height ? loc.height : dbt.height,
                             order: Object.assign(getNewOrderObject(), dbt.order || {})
-                        };
-                    });
+                        }));
+                    }
+                } else if (appState.tables.length > 0) {
+                    needsSyncBackToDb = true;
                 }
+
                 if (dbState.prices) {
                     applyPricesObject(dbState.prices);
                 }
@@ -180,6 +230,10 @@ async function loadState() {
                 appState.nextTableNumber = appState.tables.length > 0
                     ? Math.max(...appState.tables.map(t => parseInt(t.number, 10) || 0)) + 1
                     : 1;
+
+                if (needsSyncBackToDb) {
+                    await saveState();
+                }
             }
         } catch (err) {
             console.error('Error cargando estado desde Neon DB:', err);

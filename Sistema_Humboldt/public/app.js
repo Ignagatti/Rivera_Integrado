@@ -19,8 +19,10 @@ let currentTable = null;
 let currentCategoryId = null;
 let isMobileDrawerOpen = false;
 
-// Modales y selectores de Pizza
-let currentPizzaConfigType = '1_flavor'; // '1_flavor' | '2_flavors' | '3_flavors' | 'media'
+// Modales y selectores directos de Pizza en grilla
+let currentPizzaConfigType = '1_flavor'; // '1_flavor' | '2_flavors' | '3_flavors' | 'media_1' | 'media_2'
+let selectedPizzaFlavors = []; // Gustos que se van marcando directamente en las tarjetas de la grilla
+let inlinePizzaNote = ''; // Observación o ingrediente excluido (ej: "Sin cebolla") para la pizza que se está armando
 let pizzaModalSize = 'entera'; // 'entera' | 'media'
 let pizzaModalFlavorsCount = 1; // 1 | 2 | 3
 let pizzaModalQty = 1;
@@ -207,7 +209,11 @@ function refreshActiveViews() {
     }
     if (orderView && !orderView.classList.contains('hidden')) {
         renderCategories();
-        renderMenuItems();
+        const activeId = document.activeElement ? document.activeElement.id : '';
+        const isTypingMenu = activeId === 'inline-pizza-note-input' || activeId === 'menu-search-input';
+        if (!isTypingMenu && selectedPizzaFlavors.length === 0) {
+            renderMenuItems();
+        }
         const noteInput = document.getElementById('order-note');
         const isTypingNote = document.activeElement === noteInput;
         renderOrder(isTypingNote);
@@ -734,6 +740,40 @@ function selectCategory(catId) {
 
 function setPizzaConfigMode(mode) {
     currentPizzaConfigType = mode;
+    selectedPizzaFlavors = [];
+    renderMenuItems();
+}
+
+function getPizzaSelectionParams() {
+    if (currentPizzaConfigType === '2_flavors') return { size: 'entera', count: 2 };
+    if (currentPizzaConfigType === '3_flavors') return { size: 'entera', count: 3 };
+    if (currentPizzaConfigType === 'media' || currentPizzaConfigType === 'media_1') return { size: 'media', count: 1 };
+    if (currentPizzaConfigType === 'media_2') return { size: 'media', count: 2 };
+    return { size: 'entera', count: 1 };
+}
+
+function cancelPizzaFlavorSelection() {
+    selectedPizzaFlavors = [];
+    renderMenuItems();
+}
+
+function onInlinePizzaNoteInput(val) {
+    inlinePizzaNote = val;
+}
+
+function toggleInlinePizzaExclusionChip(chipText) {
+    const currentParts = inlinePizzaNote
+        ? inlinePizzaNote.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+    const idx = currentParts.findIndex(p => p.toLowerCase() === chipText.toLowerCase());
+    if (idx !== -1) {
+        currentParts.splice(idx, 1);
+    } else {
+        currentParts.push(chipText);
+    }
+    inlinePizzaNote = currentParts.join(', ');
+    const inp = document.getElementById('inline-pizza-note-input');
+    if (inp) inp.value = inlinePizzaNote;
     renderMenuItems();
 }
 
@@ -769,41 +809,97 @@ function renderMenuItems() {
 
     const searchInput = document.getElementById('menu-search-input');
     const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const { size: activePizzaSize, count: requiredFlavorsCount } = getPizzaSelectionParams();
 
-    // Mostrar barra de modo de pizza cuando estamos en la categoría Pizzas
+    // Mostrar barra de modo de pizza y observación directa cuando estamos en la categoría Pizzas
     if (modesBar) {
         if (category.id === 'pizzas') {
             modesBar.classList.remove('hidden');
+            const quickChips = ['Sin Cebolla', 'Sin Aceitunas', 'Sin Ajo', 'Sin Morrón', 'Sin Anchoas', 'Bien Cocida'];
+            const currentNoteParts = inlinePizzaNote
+                ? inlinePizzaNote.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+                : [];
+            const escapedNote = String(inlinePizzaNote || '').replace(/"/g, '&quot;');
+
             modesBar.innerHTML = `
-                <div class="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <i class="fa-solid fa-pizza-slice text-[#2563eb]"></i> Modo de Pizza:
-                    </span>
-                    <div class="flex flex-wrap gap-1.5">
-                        <button onclick="setPizzaConfigMode('1_flavor')"
-                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                currentPizzaConfigType === '1_flavor'
-                                    ? 'bg-[#2563eb] text-white shadow-sm'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }">1 Gusto (Entera)</button>
-                        <button onclick="setPizzaConfigMode('media')"
-                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                currentPizzaConfigType === 'media'
-                                    ? 'bg-[#2563eb] text-white shadow-sm'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }">Media Pizza</button>
-                        <button onclick="setPizzaConfigMode('2_flavors')"
-                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                currentPizzaConfigType === '2_flavors'
-                                    ? 'bg-[#2563eb] text-white shadow-sm'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }">2 Gustos (Mitad/Mitad)</button>
-                        <button onclick="setPizzaConfigMode('3_flavors')"
-                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                currentPizzaConfigType === '3_flavors'
-                                    ? 'bg-[#2563eb] text-white shadow-sm'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }">3 Gustos</button>
+                <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-pizza-slice text-[#2563eb]"></i> Tocá el modo y luego los gustos en la grilla:
+                        </span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button onclick="setPizzaConfigMode('1_flavor')"
+                                class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    currentPizzaConfigType === '1_flavor'
+                                        ? 'bg-[#2563eb] text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }">1 Gusto (Entera)</button>
+                            <button onclick="setPizzaConfigMode('2_flavors')"
+                                class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    currentPizzaConfigType === '2_flavors'
+                                        ? 'bg-[#2563eb] text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }">2 Gustos (Mitad/Mitad)</button>
+                            <button onclick="setPizzaConfigMode('3_flavors')"
+                                class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    currentPizzaConfigType === '3_flavors'
+                                        ? 'bg-[#2563eb] text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }">3 Gustos</button>
+                            <button onclick="setPizzaConfigMode('media_1')"
+                                class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    currentPizzaConfigType === 'media' || currentPizzaConfigType === 'media_1'
+                                        ? 'bg-[#2563eb] text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }">Media Pizza (1 Gusto)</button>
+                            <button onclick="setPizzaConfigMode('media_2')"
+                                class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                    currentPizzaConfigType === 'media_2'
+                                        ? 'bg-[#2563eb] text-white shadow-sm'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }">Media Pizza (2 Gustos)</button>
+                        </div>
+                    </div>
+
+                    ${selectedPizzaFlavors.length > 0 ? `
+                        <div class="bg-blue-50 border border-blue-300 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                            <div class="text-xs font-bold text-[#2563eb]">
+                                <i class="fa-solid fa-check-double mr-1"></i>
+                                Seleccionados (${selectedPizzaFlavors.length}/${requiredFlavorsCount}):
+                                <span class="underline">${selectedPizzaFlavors.join(' / ')}</span>
+                                — Tocá el ${selectedPizzaFlavors.length + 1}º gusto en la grilla
+                            </div>
+                            <button onclick="cancelPizzaFlavorSelection()"
+                                class="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-[11px] font-bold shrink-0">
+                                Cancelar
+                            </button>
+                        </div>
+                    ` : ''}
+
+                    <div class="pt-1 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-comment-dots text-amber-500 text-xs absolute left-3 top-1/2 -translate-y-1/2"></i>
+                            <input id="inline-pizza-note-input" type="text"
+                                value="${escapedNote}"
+                                oninput="onInlinePizzaNoteInput(this.value)"
+                                placeholder="Observación para la pizza (ej: sin cebolla, sin aceitunas)..."
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#2563eb]">
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                            ${quickChips.map(chip => {
+                                const isChipSelected = currentNoteParts.includes(chip.toLowerCase());
+                                return `
+                                    <button type="button" onclick="toggleInlinePizzaExclusionChip('${chip}')"
+                                        class="px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                            isChipSelected
+                                                ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                                                : 'bg-amber-50/70 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                        }">
+                                        ${chip}
+                                    </button>
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
                 </div>
             `;
@@ -855,30 +951,48 @@ function renderMenuItems() {
     container.innerHTML = items.map(item => {
         const isLibre = !!item.isPizzaLibre;
         const isPizza = !!item.isPizza && !isLibre;
-        const displayPrice = (isPizza && currentPizzaConfigType === 'media' && item.precioMedia)
+        const displayPrice = (isPizza && activePizzaSize === 'media' && item.precioMedia)
             ? Number(item.precioMedia)
             : Number(item.price) || 0;
 
         const safeId = String(item.id).replace(/'/g, "\\'");
 
+        // Verificar si este gusto está marcado en la selección actual
+        const selectedPositions = [];
+        if (isPizza && selectedPizzaFlavors.length > 0) {
+            selectedPizzaFlavors.forEach((flav, idx) => {
+                if (flav.toLowerCase() === item.name.toLowerCase()) {
+                    selectedPositions.push(`${idx + 1}º Gusto`);
+                }
+            });
+        }
+        const isSelectedFlavor = selectedPositions.length > 0;
+
         return `
             <div onclick="onMenuItemClicked('${safeId}')"
                 class="rounded-2xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between min-h-[104px] select-none active:scale-[0.98] shadow-sm ${
-                    isLibre
-                        ? 'bg-blue-50/80 border-2 border-[#2563eb] hover:bg-blue-50'
-                        : 'bg-white hover:border-blue-300 border-slate-200'
+                    isSelectedFlavor
+                        ? 'bg-blue-50/90 border-2 border-[#2563eb] ring-2 ring-[#2563eb]/30'
+                        : isLibre
+                            ? 'bg-blue-50/80 border-2 border-[#2563eb] hover:bg-blue-50'
+                            : 'bg-white hover:border-blue-300 border-slate-200'
                 }">
                 <div>
                     <div class="flex items-start justify-between gap-2">
                         <h4 class="font-bold text-slate-900 text-xs sm:text-sm leading-snug">${item.name}</h4>
-                        ${isLibre ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#2563eb] text-white shrink-0">LIBRE</span>` : ''}
+                        ${isSelectedFlavor
+                            ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#2563eb] text-white shrink-0">✓ ${selectedPositions.join(', ')}</span>`
+                            : isLibre
+                                ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#2563eb] text-white shrink-0">LIBRE</span>`
+                                : ''
+                        }
                     </div>
                     ${item.desc ? `<p class="text-[11px] text-slate-500 mt-1 line-clamp-1">${item.desc}</p>` : ''}
                 </div>
                 <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
                     <span class="text-sm font-extrabold text-[#2563eb]">$${displayPrice.toLocaleString('es-AR')}</span>
-                    <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#2563eb] flex items-center justify-center text-xs font-bold border border-blue-200">
-                        <i class="fa-solid fa-plus"></i>
+                    <div class="w-7 h-7 rounded-xl ${isSelectedFlavor ? 'bg-[#2563eb] text-white' : 'bg-blue-50 text-[#2563eb]'} flex items-center justify-center text-xs font-bold border border-blue-200">
+                        <i class="fa-solid ${isSelectedFlavor ? 'fa-check' : 'fa-plus'}"></i>
                     </div>
                 </div>
             </div>
@@ -925,17 +1039,36 @@ function onMenuItemClicked(itemId) {
 }
 
 function onPizzaItemClicked(pizzaItem) {
-    if (currentPizzaConfigType === '1_flavor') {
-        openPizzaBuilderModal('entera', 1, pizzaItem.name);
-    } else if (currentPizzaConfigType === 'media') {
-        openPizzaBuilderModal('media', 1, pizzaItem.name);
-    } else if (currentPizzaConfigType === '2_flavors') {
-        openPizzaBuilderModal('entera', 2, pizzaItem.name);
-    } else if (currentPizzaConfigType === '3_flavors') {
-        openPizzaBuilderModal('entera', 3, pizzaItem.name);
-    } else {
-        openPizzaBuilderModal('entera', 1, pizzaItem.name);
+    const { size, count } = getPizzaSelectionParams();
+    selectedPizzaFlavors.push(pizzaItem.name);
+
+    if (selectedPizzaFlavors.length < count) {
+        renderMenuItems();
+        showToast(`Marcado ${selectedPizzaFlavors.length}º gusto: ${pizzaItem.name}. Tocá el ${selectedPizzaFlavors.length + 1}º gusto.`, 'info');
+        return;
     }
+
+    const toppings = [...selectedPizzaFlavors];
+    const unitPrice = calculateMozosPizzaPrice(size, toppings);
+    const sizeLabel = size === 'media' ? 'Media Pizza' : 'Pizza Entera';
+    const itemName = `${sizeLabel} (${toppings.join(' / ')})`;
+    const noteToAttach = (inlinePizzaNote || '').trim();
+
+    selectedPizzaFlavors = [];
+    inlinePizzaNote = '';
+
+    addDirectItemToOrder({
+        id: `pizza_${size}_${toppings.join('_')}`,
+        name: itemName,
+        price: unitPrice,
+        qty: 1,
+        note: noteToAttach,
+        isPizza: true,
+        isPizzaLibre: false,
+        pizzaSize: size,
+        pizzaConfigType: size === 'media' ? 'media' : `${count}_flavors`,
+        toppings
+    });
 }
 
 // ============================================================================
@@ -1170,15 +1303,32 @@ function toggleLibreExclusionChip(flavorName) {
     if (idx !== -1) selectedLibreExclusions.splice(idx, 1);
     else selectedLibreExclusions.push(flavorName);
 
+    const chipBtn = document.getElementById(`excl-chip-${flavorName}`);
+    if (chipBtn) {
+        const isSel = selectedLibreExclusions.includes(flavorName);
+        chipBtn.className = isSel
+            ? 'px-2.5 py-1 rounded-full text-[11px] font-bold border border-rose-500 bg-rose-500 text-white transition-all shadow-sm'
+            : 'px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600 transition-all';
+    }
+
     const textEl = document.getElementById('pizza-libre-exclusions-text');
     if (textEl) {
-        textEl.value = selectedLibreExclusions.map(f => `Sin ${f}`).join(', ');
+        textEl.value = selectedLibreExclusions.length > 0
+            ? `NO QUIEREN: ${selectedLibreExclusions.map(f => `Sin ${f}`).join(', ')}`
+            : '';
     }
 }
 
 function confirmAddPizzaLibre() {
     const textEl = document.getElementById('pizza-libre-exclusions-text');
-    const note = textEl ? textEl.value.trim() : '';
+    const rawNote = textEl ? textEl.value.trim() : '';
+    const note = (rawNote && selectedLibreExclusions.length > 0 && !/^no quieren/i.test(rawNote))
+        ? `NO QUIEREN: ${rawNote}`
+        : rawNote;
+
+    if (note && currentTable && ordersByTable[currentTable] && !ordersByTable[currentTable].note) {
+        ordersByTable[currentTable].note = note;
+    }
 
     addDirectItemToOrder({
         id: `pizza_libre_${pizzaLibreModalType.toLowerCase()}`,
@@ -1188,7 +1338,8 @@ function confirmAddPizzaLibre() {
         note,
         isPizza: true,
         isPizzaLibre: true,
-        libreType: pizzaLibreModalType
+        libreType: pizzaLibreModalType,
+        libreExclusions: [...selectedLibreExclusions]
     });
 
     closePizzaLibreModal();
@@ -1492,8 +1643,15 @@ function renderOrder(skipNoteUpdate = false) {
                                 ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">${pending} sin enviar</span>`
                                 : `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Enviado</span>`
                             }
+                            ${it.isPizza ? `
+                                <button onclick="editOrderItemNote(${idx})"
+                                    title="Agregar o editar observación / qué gusto no quiere"
+                                    class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-800 border border-slate-200 transition-colors cursor-pointer">
+                                    <i class="fa-solid fa-pen text-[9px] mr-0.5"></i>Obs
+                                </button>
+                            ` : ''}
                         </div>
-                        ${it.note ? `<p class="text-[11px] text-amber-700 italic mt-0.5">"${it.note}"</p>` : ''}
+                        ${it.note ? `<p class="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block mt-1">⚠️ ${it.note}</p>` : ''}
                         <p class="text-xs font-extrabold text-[#2563eb] mt-0.5">$${lineTotal.toLocaleString('es-AR')}</p>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
@@ -1513,6 +1671,24 @@ function renderOrder(skipNoteUpdate = false) {
     }
 
     listEl.innerHTML = html;
+}
+
+async function editOrderItemNote(index) {
+    if (!currentTable || !ordersByTable[currentTable]) return;
+    const tableOrder = ordersByTable[currentTable];
+    const item = tableOrder.items[index];
+    if (!item) return;
+
+    const currentNote = item.note || '';
+    const updated = window.prompt(`Observación / Qué gusto o ingrediente NO quiere en ${item.name}:`, currentNote);
+    if (updated === null) return;
+    item.note = updated.trim();
+    if (item.isPizzaLibre && item.note) {
+        tableOrder.note = item.note;
+    }
+    renderOrder();
+    await saveCurrentTableToServer();
+    showToast('Observación actualizada', 'success');
 }
 
 async function sendOrderToKitchen() {
@@ -2130,6 +2306,13 @@ async function confirmNightClosure() {
     const note = noteIn ? noteIn.value.trim() : '';
 
     try {
+        if (paymentHistory.length > 0) {
+            try {
+                downloadNightReportPDF();
+            } catch (pdfErr) {
+                console.warn('Error descargando PDF automático:', pdfErr);
+            }
+        }
         const res = await fetch('/api/close-night', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2138,7 +2321,7 @@ async function confirmNightClosure() {
         if (res.ok) {
             closeNightModalCancel();
             await fetchServerState(true);
-            showToast('Cierre nocturno guardado y mesas reiniciadas', 'success');
+            showToast('PDF descargado, cierre nocturno guardado y mesas reiniciadas', 'success');
         }
     } catch (e) {
         showToast('Error al realizar el cierre nocturno', 'error');

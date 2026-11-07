@@ -139,6 +139,7 @@ function createEmptyMozosOrder() {
         pizzaLibreH: 0,
         pizzaLibreM: 0,
         pizzaLibreG: 0,
+        libreObs: '',
         menores: 0,
         menorPrice: 0,
         empanadas: 0,
@@ -183,6 +184,7 @@ function humboldtItemsToMozosOrder(items, existingOrder, prices) {
         order.menores = Number(existingOrder.menores) || 0;
         order.menorPrice = Number(existingOrder.menorPrice) || 0;
         order.menu = Number(existingOrder.menu) || 0;
+        order.libreObs = existingOrder.libreObs || '';
     }
 
     if (!Array.isArray(items)) return order;
@@ -191,8 +193,13 @@ function humboldtItemsToMozosOrder(items, existingOrder, prices) {
         const qty = Number(item.qty) || 0;
         if (qty <= 0) continue;
 
-        // Rondas adicionales de pizza libre tienen precio 0 y no suman comensales extra
-        if (item.isLibreRound) continue;
+        // Rondas adicionales de pizza libre tienen precio 0 y no suman comensales extra, pero sí pueden actualizar la observación
+        if (item.isLibreRound) {
+            if (item.note || item.libreExclusions) {
+                order.libreObs = item.note || (item.libreExclusions ? `NO QUIEREN: ${item.libreExclusions}` : order.libreObs);
+            }
+            continue;
+        }
 
         if (item.isPizzaLibre) {
             const lType = item.libreType || 'G';
@@ -206,6 +213,9 @@ function humboldtItemsToMozosOrder(items, existingOrder, prices) {
                 } else {
                     order.pizzaLibreG += qty;
                 }
+            }
+            if (item.note || item.libreExclusions) {
+                order.libreObs = item.note || (item.libreExclusions ? `NO QUIEREN: ${item.libreExclusions}` : '');
             }
             continue;
         }
@@ -236,17 +246,25 @@ function humboldtItemsToMozosOrder(items, existingOrder, prices) {
             let toppings = Array.isArray(item.toppings) && item.toppings.length > 0 ? item.toppings : [];
             if (toppings.length === 0 && item.name) {
                 const match = item.name.match(/\(([^)]+)\)/);
-                if (match) {
-                    toppings = match[1].split(/\s+y\s+|,\s*/).map(s => s.trim()).filter(Boolean);
+                if (match && !/^(entera|media)$/i.test(match[1].trim())) {
+                    toppings = match[1].split(/\s+y\s+|\s*\/\s*|,\s*/).map(s => s.trim()).filter(Boolean);
                 } else {
-                    toppings = [item.name.replace(/^Pizza\s+(Entera|Media)\s*/i, '').trim()];
+                    const cleaned = item.name
+                        .replace(/^Media\s+Pizza:?\s*/i, '')
+                        .replace(/^Pizza\s+(Entera|Media|\d\s*Gustos):?\s*/i, '')
+                        .replace(/^Pizza:?\s*/i, '')
+                        .replace(/\((Entera|Media)\)/gi, '')
+                        .trim();
+                    toppings = cleaned.split(/\s*\/\s*|\s+y\s+|,\s*/).map(s => s.replace(/^1\/[23]\s+/i, '').trim()).filter(Boolean);
                 }
             }
+            const pizzaObs = (item.note || item.obs || '').trim();
             for (let i = 0; i < qty; i++) {
                 order.pizzasPersonalizadas.push({
                     id: (item.pizzaIds && item.pizzaIds[i]) ? item.pizzaIds[i] : `${item.pizzaId || Date.now()}_${i}_${Math.random().toString(36).substring(2, 5)}`,
                     size,
-                    toppings
+                    toppings,
+                    obs: pizzaObs
                 });
             }
             continue;
@@ -281,8 +299,23 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
         return Math.min(totalQty, Number(prev.sentQty ?? prev.qty) || 0);
     };
 
+    const findPrevLibreNote = (matchFn) => {
+        const prev = (prevHumboldtItems || []).find(matchFn);
+        if (prev && (prev.note || prev.libreExclusions)) {
+            return {
+                note: prev.note || (prev.libreExclusions ? `NO QUIEREN: ${prev.libreExclusions}` : ''),
+                libreExclusions: prev.libreExclusions || ''
+            };
+        }
+        return {
+            note: order.libreObs || '',
+            libreExclusions: (order.libreObs || '').replace(/^NO QUIEREN:\s*/i, '')
+        };
+    };
+
     if ((order.pizzaLibreG || 0) > 0) {
         const qty = Number(order.pizzaLibreG);
+        const libreMeta = findPrevLibreNote(x => x.isPizzaLibre && (x.libreType === 'G' || !x.libreType) && !x.isLibreRound);
         items.push({
             id: 'pizza_libre_g',
             name: 'Pizza Libre General',
@@ -293,12 +326,16 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
             isPizzaLibre: true,
             libreType: 'G',
             libreRound: 1,
+            librePersons: qty,
+            libreExclusions: libreMeta.libreExclusions,
+            note: libreMeta.note,
             isLibreRound: false
         });
     }
 
     if ((order.pizzaLibreH || 0) > 0) {
         const qty = Number(order.pizzaLibreH);
+        const libreMeta = findPrevLibreNote(x => x.isPizzaLibre && x.libreType === 'H' && !x.isLibreRound);
         items.push({
             id: 'pizza_libre_h',
             name: 'Pizza Libre Hombres',
@@ -309,12 +346,16 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
             isPizzaLibre: true,
             libreType: 'H',
             libreRound: 1,
+            librePersons: qty,
+            libreExclusions: libreMeta.libreExclusions,
+            note: libreMeta.note,
             isLibreRound: false
         });
     }
 
     if ((order.pizzaLibreM || 0) > 0) {
         const qty = Number(order.pizzaLibreM);
+        const libreMeta = findPrevLibreNote(x => x.isPizzaLibre && x.libreType === 'M' && !x.isLibreRound);
         items.push({
             id: 'pizza_libre_m',
             name: 'Pizza Libre Mujeres',
@@ -325,6 +366,9 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
             isPizzaLibre: true,
             libreType: 'M',
             libreRound: 1,
+            librePersons: qty,
+            libreExclusions: libreMeta.libreExclusions,
+            note: libreMeta.note,
             isLibreRound: false
         });
     }
@@ -341,13 +385,14 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
 
     // Pizzas personalizadas
     if (Array.isArray(order.pizzasPersonalizadas) && order.pizzasPersonalizadas.length > 0) {
-        // Agrupar pizzas iguales (mismo tamaño y mismos gustos)
+        // Agrupar pizzas iguales (mismo tamaño, mismos gustos y misma observación)
         const grouped = new Map();
         for (const pz of order.pizzasPersonalizadas) {
             const size = pz.size === 'media' ? 'media' : 'entera';
             const toppings = (pz.toppings || []).filter(t => t && t !== 'ninguno');
             if (toppings.length === 0) continue;
-            const key = `${size}::${toppings.join('|')}`;
+            const obsText = (pz.obs || pz.note || '').trim();
+            const key = `${size}::${toppings.join('|')}::${obsText}`;
             if (!grouped.has(key)) {
                 const sizeLabel = size === 'media' ? 'Media' : 'Entera';
                 let configType = 'entera';
@@ -357,7 +402,7 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
 
                 const displayName = size === 'entera' && toppings.length === 1
                     ? `Pizza ${toppings[0]} (Entera)`
-                    : `Pizza ${sizeLabel} (${toppings.join(', ')})`;
+                    : `Pizza ${sizeLabel} (${toppings.join(' / ')})`;
 
                 grouped.set(key, {
                     id: `pizza_custom_${key}`,
@@ -368,6 +413,8 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
                     isPizzaLibre: false,
                     pizzaSize: size,
                     toppings,
+                    note: obsText,
+                    obs: obsText,
                     pizzaConfigType: configType,
                     pizzaIds: []
                 });
@@ -378,7 +425,10 @@ function mozosOrderToHumboldtItems(order, prices, currentMode = 'sabado', prevHu
         }
 
         for (const g of grouped.values()) {
-            g.sentQty = findPrevSentQty(x => x.isPizza && !x.isPizzaLibre && x.name === g.name, g.qty);
+            g.sentQty = findPrevSentQty(
+                x => x.isPizza && !x.isPizzaLibre && x.name === g.name && (x.note || x.obs || '') === (g.note || ''),
+                g.qty
+            );
             items.push(g);
         }
     }

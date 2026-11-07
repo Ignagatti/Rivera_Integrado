@@ -254,9 +254,9 @@
                                 )}
                             </div>
                             {l.obs && (
-                                <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded flex items-center gap-1.5">
-                                    <AlertCircle size={13} className="text-amber-600 shrink-0" />
-                                    <span className="truncate">{l.obs}</span>
+                                <div className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 px-2 py-1 rounded flex items-start gap-1.5">
+                                    <AlertCircle size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                                    <span className="break-words">{l.obs}</span>
                                 </div>
                             )}
                             <div className="flex gap-1.5 mt-1 pt-1 border-t border-slate-100">
@@ -424,16 +424,23 @@
                                             </div>
                                         )}
                                         {Array.isArray(o.pizzas) && o.pizzas.map((p, i) => (
-                                            <div key={i} className="flex justify-between font-medium items-center">
-                                                <span>
-                                                    <span className="font-bold text-slate-900">{p.qty}x</span> {p.description}{' '}
-                                                    {p.withBox ? (
-                                                        <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-1 py-0.2 rounded">(Caja)</span>
-                                                    ) : (
-                                                        <span className="text-[10px] text-gray-500">(Sin caja)</span>
-                                                    )}
-                                                </span>
-                                                {p.obs && <span className="text-orange-600 italic text-[11px] ml-1">({p.obs})</span>}
+                                            <div key={i} className="flex flex-col gap-0.5 py-0.5">
+                                                <div className="flex justify-between font-medium items-center">
+                                                    <span>
+                                                        <span className="font-bold text-slate-900">{p.qty}x</span> {p.description}{' '}
+                                                        {p.withBox ? (
+                                                            <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-1 py-0.2 rounded">(Caja)</span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-gray-500">(Sin caja)</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                {p.obs && (
+                                                    <div className="text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded inline-flex items-center gap-1 w-fit">
+                                                        <AlertCircle size={11} className="text-amber-700 shrink-0" />
+                                                        <span>Obs: {p.obs}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                         {Array.isArray(o.drinks) && o.drinks.map((d, i) => (

@@ -248,6 +248,10 @@
                                     <button data-type="pizzaLibreG" data-action="increase" class="op-btn bg-green-500 text-white rounded-full w-8 h-8 font-bold text-xl">+</button>
                                 </div>
                             </div>
+                            <div class="pt-2 border-t border-gray-200">
+                                <label for="libre-obs-input" class="block text-xs font-bold text-amber-800 uppercase mb-1">Observación / Gustos que NO quieren</label>
+                                <input type="text" id="libre-obs-input" placeholder="Ej: NO QUIEREN: Sin cebolla, sin anchoas..." class="w-full p-2 border border-amber-300 bg-amber-50 rounded-lg text-xs font-medium text-gray-800">
+                            </div>
                         </div>
                     </div>
 
@@ -333,6 +337,10 @@
                             <select id="pizza-topping-3">
                                 <option value="ninguno">Ninguno</option>
                             </select>
+                        </div>
+                        <div>
+                            <label for="pizza-obs-input" class="block text-xs font-bold text-amber-800 uppercase mb-1">Observación / Si no quiere algún ingrediente</label>
+                            <input type="text" id="pizza-obs-input" placeholder="Ej: Sin cebolla, sin aceitunas..." class="w-full p-2 border border-amber-300 bg-amber-50 rounded-lg text-xs font-medium text-gray-800">
                         </div>
                         <button id="add-custom-pizza-btn" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700">Agregar Pizza</button>
                     </div>
@@ -611,12 +619,12 @@
                     ¿Deseas <strong>limpiar los pedidos del día anterior</strong> para comenzar la jornada con las mesas vacías en <strong><span id="change-day-target-name"></span></strong>?
                 </p>
                 <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700">
-                    <span>Si eliges <strong>Limpiar Pedidos</strong>, las mesas y la barra se reiniciarán a $0 para comenzar el nuevo día en limpio.</span>
+                    <span>Si eliges <strong>Guardar PDF y Limpiar Pedidos</strong>, se descargará automáticamente el reporte de ventas en PDF y luego las mesas y la caja se reiniciarán a $0 para el nuevo día.</span>
                 </div>
             </div>
             <div class="p-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row gap-2 justify-end">
                 <button id="change-day-clear-btn" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-4 rounded-lg text-xs transition shadow-sm">
-                    Limpiar Pedidos Anteriores
+                    📄 Guardar PDF y Limpiar Mesas
                 </button>
                 <button id="change-day-keep-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg text-xs transition">
                     Mantener Pedidos

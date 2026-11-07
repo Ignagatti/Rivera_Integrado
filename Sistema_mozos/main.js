@@ -93,41 +93,53 @@ function calculatePizzaPrice(pizza, prices) {
   return 0;
 }
 
-function mozosOrderToHumboldtItems(order, prices) {
+function mozosOrderToHumboldtItems(order, prices, existingHumboldtItems = []) {
   if (!order) return [];
   const items = [];
+  const prevList = Array.isArray(existingHumboldtItems) ? existingHumboldtItems : [];
+  const findPrev = (predicate) => prevList.find(predicate);
+  const libreNote = order.libreObs || '';
 
   if ((order.pizzaLibreG || 0) > 0) {
+    const prev = findPrev(i => i.isPizzaLibre && (i.libreType === 'G' || !i.libreType));
+    const qty = Number(order.pizzaLibreG);
     items.push({
       id: 'pizza_libre_g',
       name: 'Pizza Libre General',
       price: Number(prices?.pizzaLibreG || prices?.pizzaLibreH) || 0,
-      qty: Number(order.pizzaLibreG),
-      sentQty: Number(order.pizzaLibreG),
+      qty,
+      sentQty: prev ? Math.min(qty, Number(prev.sentQty ?? qty)) : qty,
+      note: libreNote || prev?.note || '',
       isPizza: true,
       isPizzaLibre: true,
       libreType: 'G'
     });
   }
   if ((order.pizzaLibreH || 0) > 0) {
+    const prev = findPrev(i => i.isPizzaLibre && i.libreType === 'H');
+    const qty = Number(order.pizzaLibreH);
     items.push({
       id: 'pizza_libre_h',
       name: 'Pizza Libre Hombres',
       price: Number(prices?.pizzaLibreH) || 0,
-      qty: Number(order.pizzaLibreH),
-      sentQty: Number(order.pizzaLibreH),
+      qty,
+      sentQty: prev ? Math.min(qty, Number(prev.sentQty ?? qty)) : qty,
+      note: libreNote || prev?.note || '',
       isPizza: true,
       isPizzaLibre: true,
       libreType: 'H'
     });
   }
   if ((order.pizzaLibreM || 0) > 0) {
+    const prev = findPrev(i => i.isPizzaLibre && i.libreType === 'M');
+    const qty = Number(order.pizzaLibreM);
     items.push({
       id: 'pizza_libre_m',
       name: 'Pizza Libre Mujeres',
       price: Number(prices?.pizzaLibreM) || 0,
-      qty: Number(order.pizzaLibreM),
-      sentQty: Number(order.pizzaLibreM),
+      qty,
+      sentQty: prev ? Math.min(qty, Number(prev.sentQty ?? qty)) : qty,
+      note: libreNote || prev?.note || '',
       isPizza: true,
       isPizzaLibre: true,
       libreType: 'M'
@@ -139,7 +151,8 @@ function mozosOrderToHumboldtItems(order, prices) {
     for (const pz of order.pizzasPersonalizadas) {
       const size = pz.size === 'media' ? 'media' : 'entera';
       const toppings = Array.isArray(pz.toppings) ? pz.toppings.filter(t => t && t !== 'ninguno') : ['Muzzarella'];
-      const key = `${size}:${toppings.join('|')}`;
+      const pzObs = String(pz.obs || '').trim();
+      const key = `${size}:${toppings.join('|')}:${pzObs}`;
       const unitPrice = calculatePizzaPrice({ size, toppings }, prices);
       if (grouped.has(key)) {
         grouped.get(key).qty += 1;
@@ -152,6 +165,7 @@ function mozosOrderToHumboldtItems(order, prices) {
           price: unitPrice,
           qty: 1,
           sentQty: 1,
+          note: pzObs,
           isPizza: true,
           isPizzaLibre: false,
           pizzaSize: size,
@@ -161,28 +175,38 @@ function mozosOrderToHumboldtItems(order, prices) {
       }
     }
     for (const val of grouped.values()) {
+      const prev = findPrev(
+        i => i.isPizza && !i.isPizzaLibre && i.name === val.name && (i.note || '') === (val.note || '')
+      );
+      if (prev) {
+        val.sentQty = Math.min(val.qty, Number(prev.sentQty ?? val.qty));
+      }
       items.push(val);
     }
   }
 
   if ((order.empanadas || 0) > 0) {
+    const prev = findPrev(i => i.isEmpanada || i.id === 'item_empanada');
+    const qty = Number(order.empanadas);
     items.push({
       id: 'item_empanada',
       name: 'Empanada',
       price: Number(prices?.empanada) || 0,
-      qty: Number(order.empanadas),
-      sentQty: Number(order.empanadas),
+      qty,
+      sentQty: prev ? Math.min(qty, Number(prev.sentQty ?? qty)) : qty,
       isEmpanada: true
     });
   }
 
   if ((order.postres || 0) > 0) {
+    const prev = findPrev(i => i.isPostre || i.id === 'item_postre');
+    const qty = Number(order.postres);
     items.push({
       id: 'item_postre',
       name: 'Postre',
       price: Number(prices?.precioPostre) || 0,
-      qty: Number(order.postres),
-      sentQty: Number(order.postres),
+      qty,
+      sentQty: prev ? Math.min(qty, Number(prev.sentQty ?? qty)) : qty,
       isPostre: true
     });
   }
@@ -194,14 +218,22 @@ function mozosOrderToHumboldtItems(order, prices) {
       const pInfo = (prices?.beverages || []).find(
         b => b.name.toLowerCase() === String(bev.name).toLowerCase()
       );
+      const prev = findPrev(i => i.isBeverage && String(i.name).toLowerCase() === String(bev.name).toLowerCase());
       items.push({
         id: `bev_${bev.name}`,
         name: bev.name,
         price: pInfo ? Number(pInfo.price) || 0 : 0,
         qty: q,
-        sentQty: q,
+        sentQty: prev ? Math.min(q, Number(prev.sentQty ?? q)) : q,
         isBeverage: true
       });
+    }
+  }
+
+  // Conservar rondas adicionales de Pizza Libre
+  for (const prevItem of prevList) {
+    if (prevItem.isLibreRound) {
+      items.push(prevItem);
     }
   }
 
@@ -265,10 +297,14 @@ async function fetchDbState() {
         waiterName: td.waiterName || 'Sin asignar',
         note: td.note || '',
         libreRounds: Number(td.libreRounds) || 1,
-        order: td.order || {
+        order: td.order ? {
+          libreObs: td.order.libreObs || td.note || '',
+          ...td.order
+        } : {
           pizzaLibreH: 0, pizzaLibreM: 0, pizzaLibreG: 0,
           menores: 0, menorPrice: 0,
           empanadas: 0, postres: 0, menu: 0,
+          libreObs: td.note || '',
           beverages: [], pizzasPersonalizadas: []
         }
       };
@@ -283,15 +319,6 @@ async function fetchDbState() {
       numeroCocina: cfg.numeroCocina || null,
       archivedSales: Array.isArray(cfg.archivedSales) ? cfg.archivedSales : []
     };
-
-    lastDbSnapshotHash = JSON.stringify({
-      tables: result.tables,
-      barOrders: result.barOrders,
-      prices: result.prices,
-      currentMode: result.currentMode,
-      genericData: result.genericData,
-      archivedSales: result.archivedSales
-    });
 
     return result;
   } finally {
@@ -366,7 +393,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle('db:load-state', async () => {
     try {
-      return await fetchDbState();
+      const state = await fetchDbState();
+      if (state) {
+        lastDbSnapshotHash = JSON.stringify({
+          tables: state.tables,
+          barOrders: state.barOrders,
+          prices: state.prices,
+          currentMode: state.currentMode,
+          genericData: state.genericData,
+          archivedSales: state.archivedSales
+        });
+      }
+      return state;
     } catch (err) {
       console.error('Error en db:load-state:', err.message);
       return null;
@@ -413,11 +451,18 @@ app.whenReady().then(() => {
         }
 
         const incomingNums = new Set();
+        let anyTableHasItems = false;
+
         for (const t of stateObj.tables) {
           const tNum = String(t.number).trim();
           incomingNums.add(tNum);
           const prevData = existingMap.get(tNum) || {};
-          const humboldtItems = mozosOrderToHumboldtItems(t.order, stateObj.prices);
+          const humboldtItems = mozosOrderToHumboldtItems(t.order, stateObj.prices, prevData.humboldtItems || []);
+          if (humboldtItems.length > 0 || t.isPaid) anyTableHasItems = true;
+
+          const tableNote = humboldtItems.length > 0
+            ? (t.order?.libreObs || t.note || prevData.note || '')
+            : '';
 
           const mergedTableData = {
             ...prevData,
@@ -431,8 +476,8 @@ app.whenReady().then(() => {
             paidAmount: Number(t.paidAmount) || 0,
             tipAmount: Number(t.tipAmount) || 0,
             waiterName: t.waiterName || prevData.waiterName || 'Sin asignar',
-            note: t.note !== undefined ? t.note : (prevData.note || ''),
-            libreRounds: t.libreRounds || prevData.libreRounds || 1,
+            note: tableNote,
+            libreRounds: humboldtItems.length > 0 ? (t.libreRounds || prevData.libreRounds || 1) : 1,
             order: t.order,
             humboldtItems,
             lastUpdatedBy: 'mozos'
@@ -452,6 +497,15 @@ app.whenReady().then(() => {
           if (!incomingNums.has(oldNum)) {
             await client.query(`DELETE FROM rivera_tables WHERE table_number = $1`, [oldNum]);
           }
+        }
+
+        // Si se limpiaron todas las mesas y las ventas archivadas (cambio de día / limpiar todo),
+        // reiniciar también el historial de cobros y pozo de propinas de Humboldt POS
+        const archivedEmpty = !Array.isArray(stateObj.archivedSales) || stateObj.archivedSales.length === 0;
+        const barEmpty = !Array.isArray(stateObj.barOrders) || stateObj.barOrders.every(b => !b.isPaid && (!b.order || mozosOrderToHumboldtItems(b.order, stateObj.prices).length === 0));
+        if (!anyTableHasItems && archivedEmpty && barEmpty) {
+          await client.query(`DELETE FROM pos_payment_history`).catch(() => {});
+          await client.query(`UPDATE pos_config SET value = '0' WHERE key = 'general_tips_pool'`).catch(() => {});
         }
       }
 
@@ -516,7 +570,7 @@ app.whenReady().then(() => {
           price: unitPrice,
           unitPrice,
           boxPrice: 0,
-          obs: '',
+          obs: String(pz.obs || '').trim(),
           withBox: false
         };
       });
@@ -542,7 +596,7 @@ app.whenReady().then(() => {
           totalPrice: 0,
           inKitchen: false,
           orderNumber: null,
-          obs: '',
+          obs: String(newOrder.libreObs || '').trim(),
           fromWaiter: true
         });
 
@@ -556,8 +610,9 @@ app.whenReady().then(() => {
 
       const oldLibre = (Number(oldOrder?.pizzaLibreG) || 0) + (Number(oldOrder?.pizzaLibreH) || 0) + (Number(oldOrder?.pizzaLibreM) || 0);
       const newLibre = (Number(newOrder.pizzaLibreG) || 0) + (Number(newOrder.pizzaLibreH) || 0) + (Number(newOrder.pizzaLibreM) || 0);
+      const libreObsChanged = (newOrder.libreObs || '') !== (oldOrder?.libreObs || '');
 
-      if (newLibre > oldLibre) {
+      if (newLibre > oldLibre || (newLibre > 0 && libreObsChanged)) {
         const libresRes = await client.query(
           `SELECT value FROM rivera_pedidos_state WHERE key = 'libres' FOR UPDATE`
         );
@@ -568,9 +623,11 @@ app.whenReady().then(() => {
         const existingIdx = currentLibres.findIndex(
           l => String(l.client).toLowerCase() === formattedClient.toLowerCase()
         );
+        const libreObsStr = String(newOrder.libreObs || '').trim();
         if (existingIdx !== -1) {
           currentLibres[existingIdx].people = newLibre;
           currentLibres[existingIdx].status = 'esperando';
+          if (libreObsStr) currentLibres[existingIdx].obs = libreObsStr;
         } else {
           currentLibres.push({
             id: `libre_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -582,7 +639,7 @@ app.whenReady().then(() => {
             status: 'esperando',
             timestamp: nowTime,
             date: todayStr,
-            obs: ''
+            obs: libreObsStr
           });
         }
 
